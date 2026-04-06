@@ -11,9 +11,7 @@ use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
-    /**
-     * Handle sign-in form submission.
-     */
+    
     public function store(Request $request)
     {
         $credentials = $request->validate([
@@ -27,9 +25,7 @@ class AuthController extends Controller
                 Auth::logout();
                 $request->session()->invalidate();
                 $request->session()->regenerateToken();
-                
-                // Log failed login attempt due to inactive account
-                \App\Models\ActivityLog::create([
+                 \App\Models\ActivityLog::create([
                     'user_id' => $user->id,
                     'action' => 'login_failed',
                     'description' => 'Login attempt failed: Account is inactive',
@@ -44,7 +40,6 @@ class AuthController extends Controller
 
             $request->session()->regenerate();
             
-            // Log successful login
             \App\Models\ActivityLog::create([
                 'user_id' => $user->id,
                 'action' => 'login',
@@ -56,7 +51,6 @@ class AuthController extends Controller
             return redirect()->intended(route('dashboard'));
         }
 
-        // Log failed login attempt
         \App\Models\ActivityLog::create([
             'user_id' => null,
             'action' => 'login_failed',
@@ -70,25 +64,26 @@ class AuthController extends Controller
         ])->onlyInput('email');
     }
 
-    /**
-     * Handle registration form submission.
-     */
+    
     public function register(Request $request)
     {
         $data = $request->validate([
             'name' => 'required|string|max:255',
+            'company_name' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:20',
             'email' => 'required|email|unique:users,email',
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
         $user = User::create([
             'name' => $data['name'],
+            'company_name' => $data['company_name'] ?? null,
+            'phone' => $data['phone'] ?? null,
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
             'is_active' => false,
         ]);
 
-        // Assign default role per requirements: 'User'
         $role = \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'User', 'guard_name' => 'web']);
         $user->assignRole($role);
 
@@ -97,14 +92,9 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * Log the user out.
-     */
     public function destroy(Request $request)
     {
         $user = Auth::user();
-        
-        // Log logout activity
         if ($user) {
             \App\Models\ActivityLog::create([
                 'user_id' => $user->id,

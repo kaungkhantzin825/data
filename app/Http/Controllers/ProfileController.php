@@ -14,14 +14,18 @@ class ProfileController extends Controller
     public function index(Request $request)
     {
         $limit = $request->query('limit', 10);
-        $userQuery = \App\Models\User::query();
+
+        $userQuery = \App\Models\User::on('mysql_central');
         if (!auth()->user()->is_admin) {
             $tenantId = auth()->user()->tenant_id ?: auth()->id();
             $userQuery->where('tenant_id', $tenantId);
         }
         $users = $userQuery->paginate($limit, ['*'], 'users_page');
 
-        $activityLogs = \App\Models\ActivityLog::with('user:id,name,email,profile_logo')->latest()->paginate($limit, ['*'], 'activity_page');
+        $activityLogs = \App\Models\ActivityLog::on('mysql_central')
+            ->with('user:id,name,email,profile_logo')
+            ->latest()
+            ->paginate($limit, ['*'], 'activity_page');
 
         $backupDir = storage_path('app/backups');
         $backups = [];
@@ -30,7 +34,7 @@ class ProfileController extends Controller
             foreach ($files as $file) {
                 if ($file->getExtension() === 'sql') {
                     $backups[] = [
-                        'id' => $file->getFilename(),
+                        'id'   => $file->getFilename(),
                         'name' => 'Database Backup - ' . date('Y-m-d H:i:s', $file->getMTime()),
                         'size' => number_format($file->getSize() / 1048576, 2) . ' MB',
                         'date' => date('Y-m-d H:i:s', $file->getMTime()),
@@ -42,31 +46,39 @@ class ProfileController extends Controller
             });
         }
 
-        $tenantId = auth()->user()->tenant_id ?: auth()->id();
-        $fields = \App\Models\TenantFieldOption::where('tenant_id', $tenantId)->get()->groupBy('field_name');
+      
+        $tenantUuid = auth()->user()->tenant_id;
+        $ownerIntId = auth()->id(); 
+        if ($tenantUuid) {
+            $tenant = \App\Models\Tenant::find($tenantUuid);
+            if ($tenant) {
+                $ownerIntId = (int) $tenant->user_id;
+            }
+        }
+        $fields = \App\Models\TenantFieldOption::where('tenant_id', $ownerIntId)->get()->groupBy('field_name');
 
         $getDefault = function ($key, $defaults) use ($fields) {
             return isset($fields[$key]) ? $fields[$key]->pluck('option_value')->toArray() : $defaults;
         };
 
         $fieldOptions = [
-            'biz_type' => $getDefault('biz_type', ['Residential', 'Commercial']),
-            'source' => $getDefault('source', ['Own Lead', 'Social Media']),
-            'division' => $getDefault('division', ['Yangon', 'Mandalay']),
-            'township' => $getDefault('township', ['Bahan', 'Sanchaung']),
-            'product' => $getDefault('product', ['Internet']),
-            'channel' => $getDefault('channel', ['Direct', 'Partner']),
-            'package' => $getDefault('package', ['Home Plus', 'Business DIA']),
+            'biz_type'  => $getDefault('biz_type',  ['Residential', 'Commercial']),
+            'source'    => $getDefault('source',     ['Own Lead', 'Social Media']),
+            'division'  => $getDefault('division',   ['Yangon', 'Mandalay']),
+            'township'  => $getDefault('township',   ['Bahan', 'Sanchaung']),
+            'product'   => $getDefault('product',    ['Internet']),
+            'channel'   => $getDefault('channel',    ['Direct', 'Partner']),
+            'package'   => $getDefault('package',    ['Home Plus', 'Business DIA']),
         ];
 
         return Inertia::render('Settings', [
-            'users' => $users,
-            'activityLogs' => $activityLogs,
-            'backups' => $backups,
-            'fieldOptions' => $fieldOptions,
-            'plans' => \App\Models\Plan::all(),
-            'limit' => $limit,
-            'tab' => $request->query('tab', 'profile')
+            'users'       => $users,
+            'activityLogs'=> $activityLogs,
+            'backups'     => $backups,
+            'fieldOptions'=> $fieldOptions,
+            'plans'       => \App\Models\Plan::on('mysql_central')->get(),
+            'limit'       => $limit,
+            'tab'         => $request->query('tab', 'profile'),
         ]);
     }
 

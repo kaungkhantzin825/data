@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->integer('staff_limit')->default(1);
-            $table->integer('expire_date')->default(30);
+            $table->integer('duration_in_days')->default(30);
             $table->text('description')->nullable();
             $table->timestamps();
         });

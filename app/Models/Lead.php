@@ -7,7 +7,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Lead extends Model
 {
-    use SoftDeletes, \App\Traits\BelongsToTenant;
+    use SoftDeletes;
+
+    /** Lead data lives in the tenant's private database, configured per-request by the middleware. */
+    protected $connection = 'tenant';
     protected $fillable = [
         'uuid', 'tenant_id',
         'business_name', 'contact_name', 'contact_email', 'phone', 'township', 
@@ -16,7 +19,8 @@ class Lead extends Model
         'first_name', 'last_name', 'secondary_contact_number', 'division', 'address',
         'product', 'package_total', 'discount', 'note', 'channel',
         'installation_appointment', 'est_contract_date', 'est_start_date',
-        'est_follow_up_date', 'is_referral', 'meeting_note', 'next_step'
+        'est_follow_up_date', 'is_referral', 'meeting_note', 'next_step',
+        'contracted_date', 'installation_appointment_date', 'customer_note'
     ];
 
     protected static function boot()

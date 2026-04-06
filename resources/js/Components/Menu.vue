@@ -27,7 +27,7 @@ const page = usePage();
 const auth = computed(() => page.props.auth?.user);
 
 const can = (permission) => {
-    return auth.value?.is_admin || auth.value?.permissions?.includes(permission);
+    return auth.value?.permissions?.includes(permission);
 };
 </script>
 

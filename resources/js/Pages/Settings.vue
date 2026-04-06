@@ -44,7 +44,6 @@
                   
                     <div class="settings-layout">
                         
-                        <!-- Sidebar Menu -->
                         <div class="settings-sidebar">
                             <button class="sidebar-item" v-if="can('setting_profile')" :class="{ active: activeSettingTab === 'profile' }" @click="activeSettingTab = 'profile'">
                                 <v-icon icon="mdi-account-circle-outline" size="20" style="margin-right:8px;" />
@@ -325,7 +324,7 @@ const props = defineProps({
 });
 
 const can = (permission) => {
-    return auth.value?.is_admin || auth.value?.permissions?.includes(permission);
+    return auth.value?.permissions?.includes(permission);
 };
 
 const adminOpen = ref(false);

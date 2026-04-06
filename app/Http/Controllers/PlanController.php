@@ -27,7 +27,7 @@ class PlanController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'staff_limit' => 'required|integer|min:1',
-            'expire_date' => 'required|date',
+            'duration_in_days' => 'required|integer|min:1',
             'description' => 'nullable|string'
         ]);
 
@@ -44,7 +44,7 @@ class PlanController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'staff_limit' => 'required|integer|min:1',
-            'expire_date' => 'required|date',
+            'duration_in_days' => 'required|integer|min:1',
             'description' => 'nullable|string'
         ]);
 

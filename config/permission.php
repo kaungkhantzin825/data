@@ -75,6 +75,13 @@ return [
         'role_has_permissions' => 'role_has_permissions',
     ],
 
+    /*
+     * The database connection used for Spatie permission tables.
+     * Pinned to 'mysql_central' so the middleware tenant-DB switch never affects
+     * roles / permissions lookups.
+     */
+    'connection' => 'mysql_central',
+
     'column_names' => [
         /*
          * Change this if you want to name the related pivots other than defaults

@@ -59,8 +59,8 @@
                                          <input type="number" v-model="planForm.staff_limit" class="form-input" min="1" required />
                                      </div>
                                      <div class="form-group">
-                                         <label>Expire Date</label>
-                                         <input type="date" v-model="planForm.expire_date" class="form-input" required />
+                                         <label>Duration (Days)</label>
+                                         <input type="number" v-model="planForm.duration_in_days" class="form-input" min="1" required />
                                      </div>
                                      <div class="form-group" style="grid-column: span 2; display: flex; flex-direction: row; justify-content: flex-end; margin-top: 8px;">
                                          <button type="submit" class="btn-solid-green" style="width: max-content;">Create Plan</button>
@@ -74,7 +74,7 @@
                                          <tr>
                                              <th>Name</th>
                                              <th>Staff Limit</th>
-                                             <th>Expire Date</th>
+                                             <th>Duration (Days)</th>
                                              <th>Actions</th>
                                          </tr>
                                      </thead>
@@ -89,8 +89,8 @@
                                                  <span v-else>{{ plan.staff_limit }}</span>
                                              </td>
                                              <td>
-                                                 <input v-if="editingPlanId === plan.id" type="date" v-model="editPlanForm.expire_date" class="form-input" style="padding:4px 8px; font-size:14px; height:32px; width:140px;" required />
-                                                 <span v-else>{{ plan.expire_date }}</span>
+                                                 <input v-if="editingPlanId === plan.id" type="number" v-model="editPlanForm.duration_in_days" class="form-input" style="padding:4px 8px; font-size:14px; height:32px; width:100px;" min="1" required />
+                                                 <span v-else>{{ plan.duration_in_days }} days</span>
                                              </td>
                                              <td class="action-td">
                                                  <div class="btn-wrap">
@@ -140,7 +140,7 @@ const props = defineProps({
 });
 
 const can = (permission) => {
-    return auth.value?.is_admin || auth.value?.permissions?.includes(permission);
+    return auth.value?.permissions?.includes(permission);
 };
 
 const logout = () => router.post('/logout');
@@ -148,7 +148,7 @@ const logout = () => router.post('/logout');
 const planForm = useForm({
     name: '',
     staff_limit: 1,
-    expire_date: '',
+    duration_in_days: 30,
     description: ''
 });
 
@@ -173,14 +173,14 @@ const editingPlanId = ref(null);
 const editPlanForm = useForm({
     name: '',
     staff_limit: 1,
-    expire_date: ''
+    duration_in_days: 30
 });
 
 const startEdit = (plan) => {
     editingPlanId.value = plan.id;
     editPlanForm.name = plan.name;
     editPlanForm.staff_limit = plan.staff_limit;
-    editPlanForm.expire_date = plan.expire_date;
+    editPlanForm.duration_in_days = plan.duration_in_days;
 };
 
 const updatePlan = (id) => {

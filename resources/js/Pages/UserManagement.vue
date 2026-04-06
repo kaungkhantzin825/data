@@ -2,9 +2,6 @@
     <v-app theme="light">
         <div class="dash-root">
 
-            <!-- ══════════════════════════════════════
-                 TOP NAVBAR
-            ══════════════════════════════════════ -->
             <header class="topbar">
                 <div class="topbar-left">
                     <img src="/images/MOJOERESTO_ASSET_LOGO_BLACK800-2 1.png"
@@ -26,21 +23,18 @@
                 </div>
             </header>
 
-            <!-- ══════════════════════════════════════
-                 FULL BACKGROUND WRAPPER
-            ══════════════════════════════════════ -->
             <div class="page-background-wrapper">
                 <div class="bg-overlay"></div>
                 
                 <div class="page-content-wrapper">
                     
-                    <!-- Top section with Badge and Tabs -->
+                    
                     <div class="banner-content">
                         <div class="module-badge">Lead Management</div>
                         <Menu activeTab="users" />
                     </div>
 
-                    <!-- Breadcrumb Card -->
+                  
                     <div class="breadcrumb-card">
                         <div class="bc-home-icon">
                             <v-icon icon="mdi-home" size="16" color="#fff" />
@@ -51,9 +45,9 @@
                         <span class="bc-active" style="text-transform: capitalize">{{ tab }}</span>
                     </div>
 
-                    <!-- Main Data Card -->
+                    
                     <div class="content-card" style="padding: 24px;">
-                        <!-- Card Header -->
+                        
                         <div class="card-header">
                             <div>
                                 <h2 class="card-title" style="text-transform: capitalize">{{ tab }} Management</h2>
@@ -72,39 +66,42 @@
                             </div>
                         </div>
 
-                        <!-- Data Table -->
                         <div class="table-wrap" style="margin-top: 20px; overflow-x: auto; width: 100%;">
                             <table class="data-table">
                                 <thead>
                                     <tr>
-                                        <!-- Users Headers -->
+                                       
                                         <template v-if="tab === 'users'">
                                             <th>Name</th>
+                                            <th>Company</th>
+                                            <th>Phone</th>
                                             <th>Email</th>
                                             <th>Role(s)</th>
                                             <th>Status</th>
-                                            <th v-if="auth?.is_admin">Expire Date</th>
+                                            <th v-if="auth?.is_admin">Duration (Days)</th>
                                             <th>Action</th>
                                         </template>
 
-                                        <!-- Roles Headers -->
+                                      
                                         <template v-if="tab === 'roles'">
                                             <th>Name</th>
                                             <th>Permissions</th>
                                             <th>Action</th>
                                         </template>
 
-                                        <!-- Permissions Headers -->
+                                      
                                         <template v-if="tab === 'permissions'">
                                             <th>Name</th>
                                         </template>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <!-- USERS -->
+                                 
                                     <template v-if="tab === 'users'">
                                         <tr v-for="user in props.users" :key="user.id">
                                             <td>{{ user.name }}</td>
+                                            <td>{{ user.company_name || '-' }}</td>
+                                            <td>{{ user.phone || '-' }}</td>
                                             <td>{{ user.email }}</td>
                                             <td>
                                                 <span v-for="ro in user.roles" :key="ro.id" class="role-badge">
@@ -118,7 +115,7 @@
                                             </td>
                                             <td v-if="auth?.is_admin">
                                                 <div v-if="user.plan_expired_at" :style="getExpireStyle(user.plan_expired_at)">
-                                                    {{ new Date(user.plan_expired_at).toLocaleDateString() }}
+                                                    {{ getRemainingDays(user.plan_expired_at) }} Days
                                                     <v-icon v-if="isNearExpiration(user.plan_expired_at)" icon="mdi-alarm" size="14" style="margin-left: 4px;" />
                                                 </div>
                                                 <span v-else style="color: #9ca3af; font-size: 0.85rem;">-</span>
@@ -151,7 +148,6 @@
                                         </tr>
                                     </template>
 
-                                    <!-- ROLES -->
                                     <template v-if="tab === 'roles'">
                                         <tr v-for="ro in props.roles" :key="ro.id">
                                             <td><strong>{{ ro.name }}</strong></td>
@@ -169,7 +165,6 @@
                                         </tr>
                                     </template>
 
-                                    <!-- PERMISSIONS -->
                                     <template v-if="tab === 'permissions'">
                                         <tr v-for="p in props.permissions" :key="p.id">
                                             <td>
@@ -189,9 +184,6 @@
                 </div>
             </div>
 
-            <!-- ══════════════════════════════════════
-                 USER DETAIL MODAL
-            ══════════════════════════════════════ -->
             <div v-if="detailDialog" class="custom-modal-backdrop" @click.self="detailDialog = false">
                 <div class="custom-modal-card" style="max-width: 500px;">
                     <div class="modal-header">
@@ -201,7 +193,9 @@
                     <div class="modal-body" v-if="activeDetailUser" style="display:flex; flex-direction:column; gap: 16px;">
                         <div style="background: #f9fafb; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb;">
                             <div style="font-size: 1.1rem; font-weight: 600; color: #111827;">{{ activeDetailUser.name }}</div>
-                            <div style="font-size: 0.9rem; color: #6b7280;">{{ activeDetailUser.email }}</div>
+                            <div v-if="activeDetailUser.company_name" style="font-size: 0.95rem; font-weight: 500; color: #374151; margin-top: 4px;">🏢 {{ activeDetailUser.company_name }}</div>
+                            <div style="font-size: 0.9rem; color: #6b7280; margin-top: 4px;">✉️ {{ activeDetailUser.email }}</div>
+                            <div v-if="activeDetailUser.phone" style="font-size: 0.9rem; color: #6b7280; margin-top: 2px;">📞 {{ activeDetailUser.phone }}</div>
                         </div>
 
                         <div style="display: flex; flex-direction: column; gap: 12px;">
@@ -246,9 +240,7 @@
                 </div>
             </div>
 
-            <!-- ══════════════════════════════════════
-                 USER FORM MODAL (Add/Edit)
-            ══════════════════════════════════════ -->
+          
             <div v-if="userDialog" class="custom-modal-backdrop" @click.self="userDialog = false">
                 <div class="custom-modal-card">
                     <div class="modal-header">
@@ -260,6 +252,16 @@
                             <label>Full Name</label>
                             <input v-model="userForm.name" type="text" class="form-input" placeholder="Enter full name" />
                             <span v-if="userForm.errors.name" class="error-text">{{ userForm.errors.name }}</span>
+                        </div>
+                        <div class="form-group">
+                            <label>Company Name</label>
+                            <input v-model="userForm.company_name" type="text" class="form-input" placeholder="Enter company name" />
+                            <span v-if="userForm.errors.company_name" class="error-text">{{ userForm.errors.company_name }}</span>
+                        </div>
+                        <div class="form-group">
+                            <label>Phone Number</label>
+                            <input v-model="userForm.phone" type="text" class="form-input" placeholder="Enter phone number" />
+                            <span v-if="userForm.errors.phone" class="error-text">{{ userForm.errors.phone }}</span>
                         </div>
                         <div class="form-group">
                             <label>Email Address</label>
@@ -289,14 +291,10 @@
                         <template v-if="auth?.is_admin">
                             <div class="form-group" style="margin-top:16px;">
                                 <label>Assign SaaS Plan</label>
-                                <select v-model="userForm.plan_id" class="form-input">
+                                <select v-model="userForm.plan_id" @change="updateExpireDate" class="form-input">
                                     <option :value="null">None</option>
                                     <option v-for="pl in props.plans" :key="pl.id" :value="pl.id">{{ pl.name }} (Lmt: {{ pl.staff_limit }})</option>
                                 </select>
-                            </div>
-                            <div class="form-group" v-if="userForm.plan_id">
-                                <label>Plan Expiration Date</label>
-                                <input v-model="userForm.plan_expired_at" type="date" class="form-input" />
                             </div>
                         </template>
                     </div>
@@ -309,9 +307,6 @@
                 </div>
             </div>
 
-            <!-- ══════════════════════════════════════
-                 ROLE PERMISSION MODAL (Edit)
-            ══════════════════════════════════════ -->
             <div v-if="roleDialog" class="custom-modal-backdrop" @click.self="roleDialog = false">
                 <div class="custom-modal-card">
                     <div class="modal-header">
@@ -352,9 +347,7 @@
                     </div>
                 </div>
             </div>
-            <!-- ══════════════════════════════════════
-                 CREATE ROLE MODAL
-            ══════════════════════════════════════ -->
+          
             <div v-if="createRoleDialog" class="custom-modal-backdrop" @click.self="createRoleDialog = false">
                 <div class="custom-modal-card">
                     <div class="modal-header">
@@ -377,9 +370,6 @@
                 </div>
             </div>
 
-            <!-- ══════════════════════════════════════
-                 CREATE PERMISSION MODAL
-            ══════════════════════════════════════ -->
             <div v-if="createPermDialog" class="custom-modal-backdrop" @click.self="createPermDialog = false">
                 <div class="custom-modal-card">
                     <div class="modal-header">
@@ -428,11 +418,16 @@ const auth = computed(() => page.props.auth?.user);
 const adminOpen = ref(false);
 const tab = ref('users');
 
+const getRemainingDays = (dateString) => {
+    if (!dateString) return 0;
+    const diff = new Date(dateString) - new Date();
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    return days > 0 ? days : 0;
+};
+
 const isNearExpiration = (dateString) => {
     if (!dateString) return false;
-    const diff = new Date(dateString) - new Date();
-    const days = diff / (1000 * 60 * 60 * 24);
-    return days <= 7;
+    return getRemainingDays(dateString) <= 7;
 };
 
 const getExpireStyle = (dateString) => {
@@ -486,7 +481,7 @@ const toggleGroup = (groupName) => {
 };
 
 const can = (permission) => {
-    return auth.value?.is_admin || auth.value?.permissions?.includes(permission);
+    return auth.value?.permissions?.includes(permission);
 };
 
 const goToDashboard = () => {
@@ -508,6 +503,8 @@ const isEdit = ref(false);
 const userForm = useForm({
     id: null,
     name: '',
+    company_name: '',
+    phone: '',
     email: '',
     password: '',
     password_confirmation: '',
@@ -515,6 +512,19 @@ const userForm = useForm({
     plan_id: null,
     plan_expired_at: '',
 });
+
+const updateExpireDate = () => {
+    if (userForm.plan_id) {
+        const plan = props.plans.find(p => p.id === userForm.plan_id);
+        if (plan && plan.duration_in_days) {
+            const date = new Date();
+            date.setDate(date.getDate() + parseInt(plan.duration_in_days));
+            userForm.plan_expired_at = date.toISOString().split('T')[0];
+        }
+    } else {
+        userForm.plan_expired_at = '';
+    }
+};
 
 const roleDialog = ref(false);
 const activeRole = ref(null);
@@ -552,6 +562,8 @@ const openEditUser = (u) => {
     userForm.clearErrors();
     userForm.id = u.id;
     userForm.name = u.name;
+    userForm.company_name = u.company_name || '';
+    userForm.phone = u.phone || '';
     userForm.email = u.email;
     userForm.roles = u.roles ? u.roles.map(r => r.name) : [];
     userForm.plan_id = u.plan_id || null;
@@ -595,7 +607,7 @@ const openEditRole = (role) => {
     activeRole.value = role;
     roleForm.name = role.name;
     roleForm.permissions = role.permissions.map(p => p.name);
-    activeGroup.value = 'Dashboard'; // Reset tab viewer when opening modal
+    activeGroup.value = 'Dashboard'; 
     roleDialog.value = true;
 };
 
@@ -663,7 +675,7 @@ const toggleActive = (user) => {
                 preserveScroll: true,
                 onSuccess: () => {
                     if (Object.keys(page.props.errors).length > 0) {
-                        return; // Let onError handle it
+                        return; 
                     }
                     Swal.fire({
                         title: 'Updated!',

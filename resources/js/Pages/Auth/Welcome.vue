@@ -1,25 +1,16 @@
 <template>
     <v-app theme="pipelineTheme">
         <div class="page-root">
-
-            <!-- Background image: always fills fixed root -->
             <div class="bg-fill"></div>
-
-            <!-- ========== DESKTOP ========== -->
             <div v-if="!smAndDown" class="desktop">
-
-                <!-- Left 42% : logo vertically centered -->
                 <div class="d-left">
                     <img src="/images/logo_web.png" alt="Pipeline" class="logo" />
                 </div>
-
-                <!-- Right 58% : "Join Us!" + cards vertically centered -->
                 <div class="d-right">
                     <div class="d-box">
                         <h1 class="d-title">Join Us!</h1>
                         <p class="d-sub">To begin this journey, tell us what type of account you'd be opening.</p>
 
-                        <!-- Sign-In card -->
                         <div class="opt-card" @click="goToLogin"
                             @mouseenter="h1=true" @mouseleave="h1=false"
                             :class="{hov: h1}">
@@ -34,7 +25,7 @@
                                 color="#2ecc5e" class="opt-arrow" />
                         </div>
 
-                        <!-- Create Account card -->
+                       
                         <div class="opt-card" @click="goToRegister"
                             @mouseenter="h2=true" @mouseleave="h2=false"
                             :class="{hov: h2}">
@@ -45,14 +36,14 @@
                                 <div class="opt-title">Create Account</div>
                                 <div class="opt-sub">Own or belong to a company, this is for you.</div>
                             </div>
-                            <!-- No arrow for Create Account in the demo! -->
+                           
                         </div>
                     </div>
                 </div>
 
             </div>
 
-            <!-- ========== MOBILE ========== -->
+         
             <div v-if="smAndDown" class="mobile">
 
                 <div class="m-top">
@@ -112,9 +103,7 @@ const goToRegister = () => router.visit('/register');
     height: 100% !important;
 }
 
-/* ─────────────────────────────────────────────────
-   PAGE ROOT
-───────────────────────────────────────────────── */
+
 .page-root {
     position: fixed;
     inset: 0;
@@ -132,9 +121,7 @@ const goToRegister = () => router.visit('/register');
     z-index: 0;
 }
 
-/* ═══════════════════════════════════════════════
-   DESKTOP LAYOUT
-═══════════════════════════════════════════════ */
+
 .desktop {
     position: absolute;
     inset: 0;
@@ -143,7 +130,7 @@ const goToRegister = () => router.visit('/register');
     flex-direction: row;
 }
 
-/* Left 45% */
+
 .d-left {
     flex: 0 0 45%;
     display: flex;
@@ -158,7 +145,7 @@ const goToRegister = () => router.visit('/register');
     transition: opacity .2s;
 }
 
-/* Right 55% */
+
 .d-right {
     flex: 1;
     display: flex;
@@ -170,7 +157,7 @@ const goToRegister = () => router.visit('/register');
 
 .d-box {
     width: 100%;
-    max-width: 440px; /* Matching the broader layout seen in demo */
+    max-width: 440px; 
 }
 
 .d-title {
@@ -210,7 +197,7 @@ const goToRegister = () => router.visit('/register');
     box-shadow: 0 8px 30px rgba(46,204,94,0.15);
 }
 
-/* Left Icon Boxes */
+
 .opt-square-fill {
     flex-shrink: 0;
     width: 46px;
@@ -219,7 +206,7 @@ const goToRegister = () => router.visit('/register');
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 2px; /* Very sharp */
+    border-radius: 2px; 
 }
 
 .opt-square-outline {
@@ -231,7 +218,7 @@ const goToRegister = () => router.visit('/register');
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 2px; /* Very sharp */
+    border-radius: 2px; 
 }
 
 .opt-body { flex: 1; min-width: 0; }
@@ -258,9 +245,7 @@ const goToRegister = () => router.visit('/register');
     transform: translateX(4px); 
 }
 
-/* ═══════════════════════════════════════════════
-   MOBILE LAYOUT
-═══════════════════════════════════════════════ */
+
 .mobile {
     position: absolute;
     inset: 0;
@@ -270,7 +255,7 @@ const goToRegister = () => router.visit('/register');
     overflow-y: auto;
 }
 
-/* Top 25% */
+
 .m-top {
     position: relative;
     flex: 0 0 25%;

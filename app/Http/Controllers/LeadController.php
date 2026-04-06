@@ -12,10 +12,6 @@ class LeadController extends Controller
     public function dashboard(Request $request)
     {
         $query = Lead::query()->with('creator:id,name');
-        if (!auth()->user()->is_admin) {
-            $query->where('created_by', auth()->id());
-        }
-
         $allLeads = $query->get();
         $now = \Carbon\Carbon::now();
 
@@ -55,6 +51,7 @@ class LeadController extends Controller
                 };
 
         $summaryPlans = ['Enterprise', 'Business DIA', 'MojoeElite', 'Premium Home Fiber', 'Staff Plan'];
+        
         $summaryReports = [];
         $reqMonth = $request->input('month', now()->month);
         $reqYear = $request->input('year', now()->year);
@@ -68,8 +65,7 @@ class LeadController extends Controller
             });
 
             $filteredLeads = $planLeads->filter(function ($l) use ($reqMonth, $reqYear) {
-                if (!$l->created_at)
-                    return false;
+                if (!$l->created_at) return false;
                 $ca = \Carbon\Carbon::parse($l->created_at);
                 return $ca->month == $reqMonth && $ca->year == $reqYear;
             });
@@ -97,8 +93,7 @@ class LeadController extends Controller
                     $match = (str_contains($p, $search) || str_contains($pkg, $search));
                 }
 
-                if (!$match)
-                    return false;
+                if (!$match) return false;
 
                 $ca = \Carbon\Carbon::parse($l->created_at);
                 return $ca->month == $reqMonth && $ca->year == $reqYear;
@@ -114,23 +109,33 @@ class LeadController extends Controller
                 ->get(['id', 'name', 'email', 'plan_expired_at']);
         }
 
+       
+        $monthLeads = $allLeads->filter(function ($l) use ($reqMonth, $reqYear) {
+            if (!$l->created_at) return false;
+            $ca = \Carbon\Carbon::parse($l->created_at);
+            return $ca->month == $reqMonth && $ca->year == $reqYear;
+        });
+
+        $allLeadsReport = $buildMetrics($allLeads);
+        $monthlyOverview = $buildMetrics($monthLeads);
+
         return Inertia::render('Dashboard', [
-            'activeTab' => 'dashboard',
+            'activeTab'      => 'dashboard',
             'summaryReports' => $summaryReports,
-            'diaReports' => $diaReports,
-            'totalLeads' => $allLeads->count(),
-            'expiringPlans' => $expiringPlans
+            'diaReports'     => $diaReports,
+            'totalLeads'     => $allLeads->count(),
+            'allLeadsReport' => $allLeadsReport,
+            'monthlyOverview'=> $monthlyOverview,
+            'expiringPlans'  => $expiringPlans,
+            'reqMonth'       => $reqMonth,
+            'reqYear'        => $reqYear,
+            'fieldOptions'   => $this->getTenantFieldOptions(),
         ]);
     }
 
     public function index(Request $request)
     {
         $query = Lead::query();
-
-        if (!auth()->user()->is_admin) {
-            $query->where('created_by', auth()->id());
-        }
-
         if ($request->search) {
             $query->where(function ($q) use ($request) {
                 $q->where('business_name', 'like', "%{$request->search}%")
@@ -151,6 +156,8 @@ class LeadController extends Controller
             $query->where('status', $request->status);
         }
 
+        \Log::info('Lead Query:', ['sql' => $query->toSql(), 'bindings' => $query->getBindings(), 'user' => auth()->id()]);
+
         $leads = $query->orderByDesc('id')->paginate(10)->withQueryString();
 
         $availablePlans = Lead::whereNotNull('plan')->where('plan', '!=', '')->distinct()->pluck('plan');
@@ -162,26 +169,26 @@ class LeadController extends Controller
             'activeTab' => 'lists',
             'availablePlans' => $availablePlans,
             'availableBizTypes' => $availableBizTypes,
+            'fieldOptions' => $this->getTenantFieldOptions(),
         ]);
     }
 
     private function getTenantFieldOptions()
     {
-        $tenantId = auth()->user()->tenant_id ?: auth()->id();
-        $fields = TenantFieldOption::where('tenant_id', $tenantId)->get()->groupBy('field_name');
+        $fields = TenantFieldOption::all()->groupBy('field_name');
 
-        $getDefault = function ($key, $defaults) use ($fields) {
-            return isset($fields[$key]) ? $fields[$key]->pluck('option_value')->toArray() : $defaults;
+        $getOptions = function ($key) use ($fields) {
+            return isset($fields[$key]) ? $fields[$key]->pluck('option_value')->toArray() : [];
         };
 
         return [
-            'biz_type' => $getDefault('biz_type', ['Residential', 'Commercial']),
-            'source' => $getDefault('source', ['Own Lead', 'Social Media']),
-            'division' => $getDefault('division', ['Yangon', 'Mandalay']),
-            'township' => $getDefault('township', ['Bahan', 'Sanchaung']),
-            'product' => $getDefault('product', ['Internet']),
-            'channel' => $getDefault('channel', ['Direct', 'Partner']),
-            'package' => $getDefault('package', ['Home Plus', 'Business DIA']),
+            'biz_type'  => $getOptions('biz_type'),
+            'source'    => $getOptions('source'),
+            'division'  => $getOptions('division'),
+            'township'  => $getOptions('township'),
+            'product'   => $getOptions('product'),
+            'channel'   => $getOptions('channel'),
+            'package'   => $getOptions('package'),
         ];
     }
 
@@ -250,10 +257,6 @@ class LeadController extends Controller
             $query->where('uuid', $id)->orWhere('id', $id);
         });
 
-        if (!auth()->user()->is_admin) {
-            $q->where('created_by', auth()->id());
-        }
-
         $lead = $q->firstOrFail();
 
         $validated = $request->validate([
@@ -301,7 +304,10 @@ class LeadController extends Controller
         $query = Lead::query();
 
         if (!auth()->user()->is_admin) {
-            $query->where('created_by', auth()->id());
+           
+            if (auth()->user()->hasRole('Staff')) {
+                $query->where('created_by', auth()->id());
+            }
         }
 
         if ($request->search) {
@@ -311,38 +317,44 @@ class LeadController extends Controller
                     ->orWhere('phone', 'like', "%{$request->search}%");
             });
         }
-        if ($request->plan) {
-            $query->where('plan', $request->plan);
-        }
-        if ($request->biz_type) {
-            $query->where('biz_type', $request->biz_type);
-        }
-        if ($request->status) {
-            $query->where('status', $request->status);
-        }
+        if ($request->plan)     { $query->where('plan', $request->plan); }
+        if ($request->biz_type) { $query->where('biz_type', $request->biz_type); }
+        if ($request->status)   { $query->where('status', $request->status); }
 
         $leads = $query->orderByDesc('id')->get();
 
-        $headers = [
-            'Content-type' => 'text/csv',
+        $httpHeaders = [
+            'Content-type'        => 'text/csv',
             'Content-Disposition' => 'attachment; filename=leads_export_' . date('Y-m-d_H-i-s') . '.csv',
-            'Pragma' => 'no-cache',
-            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
-            'Expires' => '0',
+            'Pragma'              => 'no-cache',
+            'Cache-Control'       => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires'             => '0',
         ];
 
-        $columns = ['ID', 'UUID', 'Business Name', 'Contact Name', 'Email', 'Phone', 'Secondary Phone', 'Biz Type', 'Source', 'Division', 'Township', 'Address', 'Product', 'Package', 'Package Total', 'Discount', 'Status', 'Channel', 'Installation Appointment', 'Est. Contract Date', 'Est. Start Date', 'Est. Follow Up Date', 'Referral', 'Meeting Note', 'Next Step', 'Created At'];
+        $csvColumns = [
+            'id', 'uuid', 'business_name', 'first_name', 'last_name',
+            'contact_email', 'phone', 'secondary_contact_number',
+            'biz_type', 'source', 'division', 'township', 'address',
+            'product', 'package', 'package_total', 'discount',
+            'status', 'channel',
+            'installation_appointment', 'est_contract_date',
+            'est_start_date', 'est_follow_up_date',
+            'is_referral', 'meeting_note', 'next_step', 'created_at',
+        ];
 
-        $callback = function () use ($leads, $columns) {
+        $callback = function () use ($leads, $csvColumns) {
             $file = fopen('php://output', 'w');
-            fputcsv($file, $columns);
+            fputcsv($file, $csvColumns);
 
             foreach ($leads as $lead) {
+                
+                $nameParts = explode(' ', $lead->contact_name ?? '', 2);
                 fputcsv($file, [
                     $lead->id,
                     $lead->uuid,
                     $lead->business_name,
-                    $lead->contact_name,
+                    $nameParts[0] ?? '',
+                    $nameParts[1] ?? '',
                     $lead->contact_email,
                     $lead->phone,
                     $lead->secondary_contact_number,
@@ -370,93 +382,195 @@ class LeadController extends Controller
             fclose($file);
         };
 
-        return response()->stream($callback, 200, $headers);
+        return response()->stream($callback, 200, $httpHeaders);
     }
 
     public function import(Request $request)
     {
         $request->validate([
-            'file' => 'required|file',
-            'update_existing' => 'nullable|string'
+            'file'            => 'required|file',
+            'update_existing' => 'nullable|string',
         ]);
 
         $updateExisting = $request->update_existing === 'true';
 
-        $file = $request->file('file');
-        $handle = fopen($file->getRealPath(), "r");
+        $file   = $request->file('file');
+        $handle = fopen($file->getRealPath(), 'r');
 
-        $headers = fgetcsv($handle, 5000, ",");
-        if (!$headers) {
+        $rawHeaders = fgetcsv($handle, 5000, ',');
+        if (!$rawHeaders) {
             return redirect()->back()->withErrors(['file' => 'Invalid CSV format.']);
         }
+        $rawHeaders[0] = ltrim($rawHeaders[0], "\xEF\xBB\xBF\xFF\xFE");
+        $headers = array_map(fn($h) => trim(strtolower(trim($h))), $rawHeaders);
 
-        $headers = array_map('strtolower', $headers);
-        $headers = array_map('trim', $headers);
+        $created        = 0;
+        $updated        = 0;
+        $duplicateSkip  = 0;  
+        $nullSkip       = 0;  
+        $errors         = 0;
+        $errorDetails   = [];
 
-        $created = 0;
-        $updated = 0;
-        $skipped = 0;
+        $parseDate = function (?string $value, bool $withTime = false): ?string {
+            if (!$value || trim($value) === '') return null;
+            try {
+                $dt = \Carbon\Carbon::parse(trim($value));
+                return $withTime ? $dt->format('Y-m-d H:i:s') : $dt->format('Y-m-d');
+            } catch (\Exception $e) {
+                return null;
+            }
+        };
 
-        while (($data = fgetcsv($handle, 5000, ",")) !== FALSE) {
-            if (count($headers) !== count($data))
-                continue;
+        while (($data = fgetcsv($handle, 5000, ',')) !== false) {
+            if (count($headers) !== count($data)) continue;
             $row = array_combine($headers, $data);
 
-            $phone = $row['phone'] ?? $row['contact_information'] ?? null;
-            $firstName = $row['first_name'] ?? $row['firstname'] ?? '';
-            $lastName = $row['last_name'] ?? $row['lastname'] ?? '';
+            $get = function (array $keys) use ($row): ?string {
+                foreach ($keys as $k) {
+                    $v = $row[$k] ?? null;
+                    if ($v !== null && trim((string) $v) !== '') return trim((string) $v);
+                }
+                return null;
+            };
 
-            if (!$phone && !$firstName) {
-                $skipped++;
+            $phone = $get(['phone', 'phone_number', 'ph', 'contact_information',
+                           'mobile', 'mobile_number', 'contact_no', 'phonenumber']);
+
+            $firstName = $get(['first_name', 'firstname', 'first name', 'fname']);
+            $lastName  = $get(['last_name',  'lastname',  'last name',  'lname']);
+
+            if (!$firstName && !$lastName) {
+                $cn = $get(['contact_name', 'contact name', 'name', 'full_name']);
+                if ($cn) {
+                    $parts     = explode(' ', $cn, 2);
+                    $firstName = $parts[0] ?? '';
+                    $lastName  = $parts[1] ?? '';
+                }
+            }
+
+            if (!$phone && !$firstName && !$lastName) {
+                $nullSkip++;
                 continue;
             }
 
             $existing = null;
             if ($phone) {
                 $q = Lead::where('phone', $phone);
-                if (!auth()->user()->is_admin) {
-                    $q->where('created_by', auth()->id());
-                }
                 $existing = $q->first();
             }
 
-            $mappedData = [
-                'business_name' => $row['business_name'] ?? null,
-                'first_name' => $firstName,
-                'last_name' => $lastName,
-                'contact_email' => $row['contact_email'] ?? $row['email'] ?? null,
-                'phone' => $phone,
-                'township' => $row['township'] ?? null,
-                'address' => $row['address'] ?? null,
-                'plan' => $row['plan'] ?? $row['package'] ?? null,
-                'package' => $row['package'] ?? $row['plan'] ?? null,
-                'biz_type' => $row['biz_type'] ?? null,
-                'source' => $row['source'] ?? null,
-                'contact_name' => trim(($firstName) . ' ' . ($lastName))
-            ];
-
-            $mappedData = array_filter($mappedData, function ($value) {
-                return !is_null($value) && $value !== '';
-            });
-
             if ($existing) {
                 if ($updateExisting) {
-                    $existing->update($mappedData);
-                    $updated++;
-                }
-                else {
-                    $skipped++;
+                } else {
+                    $existing = null;
                 }
             }
-            else {
-                $mappedData['created_by'] = auth()->id();
-                Lead::create($mappedData);
-                $created++;
+
+            $refRaw     = strtolower($get(['is_referral', 'referral', 'ref']) ?? 'no');
+            $isReferral = in_array($refRaw, ['yes', '1', 'true']) ? 1 : 0;
+
+            $mappedData = [
+                'business_name'            => $get(['business_name', 'business name', 'company', 'company_name']),
+                'contact_name'             => trim("{$firstName} {$lastName}") ?: null,
+                'first_name'               => $firstName ?: null,
+                'last_name'                => $lastName  ?: null,
+                'contact_email'            => $get(['contact_email', 'email', 'e-mail', 'email_address']),
+                'phone'                    => $phone,
+                'secondary_contact_number' => $get(['secondary_contact_number', 'secondary phone',
+                                                    'secondary_phone', 'phone2', 'alt_phone']),
+                'biz_type'                 => $get(['biz_type', 'biz type', 'business_type', 'business type']),
+                'source'                   => $get(['source', 'lead_source']),
+                'division'                 => $get(['division', 'region']),
+                'township'                 => $get(['township', 'town', 'city']),
+                'address'                  => $get(['address', 'full_address']),
+                'product'                  => $get(['product', 'product_name']),
+                'package'                  => $get(['package', 'plan_name']),
+                'plan'                     => $get(['plan']) ?? $get(['package', 'plan_name']),
+                'package_total'            => is_numeric($t = $get(['package_total', 'package total', 'total'])) ? (float)$t : null,
+                'discount'                 => is_numeric($d = $get(['discount', 'disc']))                          ? (float)$d : null,
+                'amount'                   => is_numeric($a = $get(['package_total', 'package total', 'amount', 'total'])) ? (float)$a : 0,
+                'status'                   => $get(['status']),
+                'channel'                  => $get(['channel', 'sale_channel']),
+                'meeting_note'             => $get(['meeting_note', 'meeting note', 'notes', 'note']),
+                'next_step'                => $get(['next_step', 'next step', 'action']),
+                'installation_appointment' => $parseDate($get(['installation_appointment', 'installation appointment']), true),
+                'est_contract_date'        => $parseDate($get(['est_contract_date', 'est. contract date', 'est contract date', 'contract_date'])),
+                'est_start_date'           => $parseDate($get(['est_start_date', 'est. start date', 'est start date', 'start_date'])),
+                'est_follow_up_date'       => $parseDate($get(['est_follow_up_date', 'est. follow up date', 'est follow up date', 'follow_up_date'])),
+                'is_referral'              => $isReferral,
+            ];
+
+            $mappedData = array_filter($mappedData, fn($v) => $v !== null && $v !== '');
+            $mappedData['is_referral'] = $isReferral; // always set
+
+            if (empty($mappedData['business_name'])) {
+                $errors++;
+                $errorDetails[] = "[phone:{$phone}] business_name is required — column not found in CSV.";
+                continue;
+            }
+            if (empty($mappedData['contact_name'])) {
+                $mappedData['contact_name'] = $mappedData['business_name'];
+            }
+
+            try {
+                if ($existing && $updateExisting) {
+                    $existing->update($mappedData);
+                    $updated++;
+                } else {
+                    $mappedData['created_by'] = auth()->id();
+                    Lead::create($mappedData);
+                    $created++;
+                }
+            } catch (\Exception $e) {
+                $errors++;
+                $biz = $mappedData['business_name'] ?? "phone:{$phone}";
+                $errorDetails[] = "[{$biz}]: " . $e->getMessage();
+                \Log::error('CSV Import row error: ' . $e->getMessage(), [
+                    'business' => $biz,
+                    'phone'    => $phone,
+                    'keys'     => array_keys($mappedData),
+                ]);
             }
         }
 
         fclose($handle);
+        $toUtf8 = fn($str) => mb_convert_encoding((string)$str, 'UTF-8', 'UTF-8');
+        $importResult = [
+            'created'          => $created,
+            'updated'          => $updated,
+            'duplicate_skip'   => $duplicateSkip,
+            'null_skip'        => $nullSkip,
+            'errors'           => $errors,
+            'error_details'    => array_map($toUtf8, array_slice($errorDetails, 0, 10)),
+            'detected_headers' => array_map($toUtf8, $headers),
+        ];
 
-        return redirect()->route('leads.index')->with('success', "Import complete! Created: {$created}, Updated: {$updated}, Skipped (Duplicate): {$skipped}.");
+        $base = redirect()->route('leads.index')->with('importResult', $importResult);
+
+        if ($created > 0 || $updated > 0) {
+            $msg = "Created: {$created}, Updated: {$updated}.";
+            if ($duplicateSkip > 0) $msg .= " Skipped (duplicate): {$duplicateSkip}.";
+            if ($nullSkip  > 0)     $msg .= " Skipped (blank rows): {$nullSkip}.";
+            if ($errors    > 0)     $msg .= " Errors: {$errors}.";
+            return $base->with('success', $msg);
+        }
+
+        if ($errors > 0) {
+            return $base->with('error', "Import failed — {$errors} row(s) could not be saved.");
+        }
+
+        if ($duplicateSkip > 0) {
+            return $base->with('error',
+                "No new leads created — {$duplicateSkip} row(s) skipped (phone already exists). " .
+                "Tick 'Update existing' to overwrite them.");
+        }
+
+        if ($nullSkip > 0) {
+            return $base->with('error',
+                "No leads imported — {$nullSkip} row(s) had no phone number AND no name. " .
+                "Check that your CSV column names match exactly: phone, first_name, last_name.");
+        }
+
+        return $base->with('error', "No data was imported. Please check your CSV column names match the sample file.");
     }
 }

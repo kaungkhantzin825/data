@@ -13,9 +13,11 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('tenant_id')->nullable();
+            $table->string('tenant_id')->nullable()->index();
             $table->foreignId('plan_id')->nullable()->constrained('plans')->nullOnDelete();
             $table->string('name');
+            $table->string('company_name')->nullable();
+            $table->string('phone')->nullable();
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');

@@ -140,7 +140,7 @@ const props = defineProps({
 });
 
 const can = (permission) => {
-    return auth.value?.is_admin || auth.value?.permissions?.includes(permission);
+    return auth.value?.permissions?.includes(permission);
 };
 
 const logout = () => router.post('/logout');

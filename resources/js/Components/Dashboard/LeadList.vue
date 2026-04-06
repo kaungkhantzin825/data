@@ -131,7 +131,10 @@ const props = defineProps({
 const emit = defineEmits(['upload', 'download', 'apply', 'reset', 'edit', 'page']);
 
 const page = usePage();
-const can = (p) => true; 
+const auth = computed(() => page.props.auth?.user);
+const can = (p) => {
+    return auth.value?.permissions?.includes(p);
+};
 
 const pagPages = computed(() => {
     let current = props.leads.current_page;

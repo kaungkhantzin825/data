@@ -51,7 +51,6 @@
                     </div>
 
                     <div class="dash-master-wrapper">
-                        <!-- Dashboard Reports -->
                         <div v-if="tab === 'dashboard'" class="dash-col">
                             <DashboardHeader 
                                 v-model:plan="dashSelectedPlan" 
@@ -60,18 +59,15 @@
                                 @update="updateDash"
                             />
 
-                            <!-- Summary / Sales Reports (Left Column logic) -->
                             <template v-for="plan in leftPlans" :key="'summary-' + plan">
                                 <CustomerSummaryWidget :plan="plan" :report="summaryReports[plan]" />
                             </template>
 
-                            <!-- Project / DIA Reports (Right Column logic) -->
                             <template v-for="plan in rightPlans" :key="'dia-' + plan">
                                 <ProjectStatusWidget :plan="plan" :report="diaReports[plan]" />
                             </template>
                         </div>
 
-                        <!-- Lead Listing -->
                         <LeadList 
                             v-if="tab === 'lists'" 
                             :leads="leads" 
@@ -86,7 +82,6 @@
                             @page="goPage"
                         />
 
-                        <!-- Lead Creation / Editing -->
                         <LeadForm 
                             v-if="tab === 'create'" 
                             :form="leadForm" 
@@ -96,7 +91,7 @@
                             @cancel="resetLeadForm"
                         />
 
-                        <!-- Bulk Import -->
+                        
                         <ImportWidget 
                             v-if="tab === 'upload'" 
                             @download="downloadCsv"
@@ -116,8 +111,6 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { router, usePage, useForm } from '@inertiajs/vue3';
 import Swal from 'sweetalert2';
 import Menu from '@/Components/Menu.vue';
-
-// Modular Components
 import DashboardHeader from '@/Components/Dashboard/DashboardHeader.vue';
 import CustomerSummaryWidget from '@/Components/Dashboard/CustomerSummaryWidget.vue';
 import ProjectStatusWidget from '@/Components/Dashboard/ProjectStatusWidget.vue';
@@ -126,14 +119,19 @@ import LeadForm from '@/Components/Dashboard/LeadForm.vue';
 import ImportWidget from '@/Components/Dashboard/ImportWidget.vue';
 
 const props = defineProps({
-    leads:   { type: Object, default: () => ({ data: [], from: 0, to: 0, total: 0, current_page: 1, last_page: 1 }) },
-    filters: { type: Object, default: () => ({}) },
-    activeTab: { type: String, default: 'dashboard' },
-    summaryReports: { type: Object, default: () => ({}) },
-    diaReports: { type: Object, default: () => ({}) },
-    fieldOptions: { type: Object, default: () => ({}) },
-    availablePlans: { type: Array, default: () => [] },
-    availableBizTypes: { type: Array, default: () => [] }
+    leads:          { type: Object,  default: () => ({ data: [], from: 0, to: 0, total: 0, current_page: 1, last_page: 1 }) },
+    filters:        { type: Object,  default: () => ({}) },
+    activeTab:      { type: String,  default: 'dashboard' },
+    summaryReports: { type: Object,  default: () => ({}) },
+    diaReports:     { type: Object,  default: () => ({}) },
+    fieldOptions:   { type: Object,  default: () => ({}) },
+    availablePlans: { type: Array,   default: () => [] },
+    availableBizTypes: { type: Array,default: () => [] },
+    totalLeads:     { type: Number,  default: 0 },
+    allLeadsReport: { type: Object,  default: () => ({}) },
+    monthlyOverview:{ type: Object,  default: () => ({}) },
+    reqMonth:       { type: Number,  default: () => new Date().getMonth() + 1 },
+    reqYear:        { type: Number,  default: () => new Date().getFullYear() },
 });
 
 const page       = usePage();
@@ -178,7 +176,7 @@ const getSummaryData = (plan) => {
 
 
 const can = (permission) => {
-    return auth.value?.is_admin || auth.value?.permissions?.includes(permission);
+    return auth.value?.permissions?.includes(permission);
 };
 
 const checkAccess = () => {
@@ -249,7 +247,7 @@ const submitLead = () => {
 };
 
 const editLead = (lead) => {
-    editingLeadId.value = lead.uuid || lead.id;
+    editingLeadId.value = lead.id;
     leadForm.business_name = lead.business_name || '';
     leadForm.first_name = lead.first_name || '';
     leadForm.last_name = lead.last_name || '';
@@ -268,10 +266,10 @@ const editLead = (lead) => {
     leadForm.note = lead.note || '';
     leadForm.status = lead.status || '';
     leadForm.channel = lead.channel || '';
-    leadForm.installation_appointment = lead.installation_appointment || '';
-    leadForm.est_contract_date = lead.est_contract_date || '';
-    leadForm.est_start_date = lead.est_start_date || '';
-    leadForm.est_follow_up_date = lead.est_follow_up_date || '';
+    leadForm.installation_appointment = lead.installation_appointment ? lead.installation_appointment.split(' ')[0].split('T')[0] : '';
+    leadForm.est_contract_date = lead.est_contract_date ? lead.est_contract_date.split(' ')[0].split('T')[0] : '';
+    leadForm.est_start_date = lead.est_start_date ? lead.est_start_date.split(' ')[0].split('T')[0] : '';
+    leadForm.est_follow_up_date = lead.est_follow_up_date ? lead.est_follow_up_date.split(' ')[0].split('T')[0] : '';
     leadForm.is_referral = lead.is_referral ? true : false;
     leadForm.meeting_note = lead.meeting_note || '';
     leadForm.next_step = lead.next_step || '';
@@ -330,15 +328,58 @@ const hUpload = ({ file, updateExisting }) => {
             });
         },
         onSuccess: (page) => {
-            const resultMsg = page.props.flash?.success || 'File uploaded and leads imported successfully!';
-            Swal.fire('Success', resultMsg, 'success');
+            const r   = page.props.flash?.importResult;
+            const ok  = page.props.flash?.success;
+            const err = page.props.flash?.error;
+
+            if (r) {
+                if (r.created > 0 || r.updated > 0) {
+                    let html = `<b>Created:</b> ${r.created} &nbsp; <b>Updated:</b> ${r.updated}`;
+                    if (r.duplicate_skip > 0) html += ` &nbsp; <b>Skipped (duplicate):</b> ${r.duplicate_skip}`;
+                    if (r.null_skip > 0)      html += ` &nbsp; <b>Blank rows:</b> ${r.null_skip}`;
+                    if (r.errors > 0) {
+                        html += `<br><br><span style="color:#ef4444"><b>${r.errors} row(s) failed:</b></span><br>`;
+                        html += r.error_details.map(e => `<small>• ${e}</small>`).join('<br>');
+                    }
+                    Swal.fire({ title: '✅ Import Complete', html, icon: 'success' });
+
+                } else if (r.errors > 0) {
+                    let html = `<b>${r.errors} row(s) could not be saved:</b><br><br>`;
+                    html += r.error_details.map(e => `<small style="color:#ef4444">• ${e}</small>`).join('<br>');
+                    Swal.fire({ title: '❌ Import Failed', html, icon: 'error' });
+
+                } else if (r.duplicate_skip > 0 && !r.null_skip) {
+                    Swal.fire('⚠️ No New Leads',
+                        `${r.duplicate_skip} row(s) already exist. Tick "Update existing" to overwrite them.`,
+                        'warning');
+
+                } else if (r.null_skip > 0) {
+                    const hdrs = (r.detected_headers || []).join(', ') || 'none detected';
+                    let html = `<b>${r.null_skip} row(s) had no phone AND no name found.</b><br><br>`;
+                    html += `<small style="color:#6b7280">Columns detected in your file:</small><br>`;
+                    html += `<small style="color:#374151"><b>${hdrs}</b></small><br><br>`;
+                    html += `<small style="color:#ef4444">Required column names: <b>phone</b>, <b>first_name</b> (or <b>last_name</b>)</small><br>`;
+                    html += `<small style="color:#6b7280">Make sure your file uses the <b>Sample CSV</b> headers exactly.</small>`;
+                    Swal.fire({ title: '❌ Column Name Mismatch', html, icon: 'error' });
+
+                } else {
+                    Swal.fire('⚠️ Nothing Imported', err || 'Please check your CSV file and column names.', 'warning');
+                }
+            } else if (err) {
+                Swal.fire('❌ Import Failed', err, 'error');
+            } else {
+                Swal.fire('✅ Success', ok || 'Import complete!', 'success');
+            }
         },
+
         onError: (err) => {
             console.error(err);
-            Swal.fire('Error', 'There was an error uploading the CSV file. Please check your columns.', 'error');
+            const firstError = Object.values(err)[0] || 'Please check your CSV file.';
+            Swal.fire('❌ Upload Error', firstError, 'error');
         }
     });
 };
+
 
 const resetFilters = () => {
     f.value = { search: '', plan: '', biz_type: '', status: '' };

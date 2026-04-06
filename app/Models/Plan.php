@@ -9,6 +9,9 @@ class Plan extends Model
 {
     use HasFactory;
 
+    /** Plans are always in the central DB. */
+    protected $connection = 'mysql_central';
+
     protected $guarded = [];
 
     public function users()

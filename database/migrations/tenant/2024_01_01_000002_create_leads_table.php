@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->nullable()->unique();
             $table->unsignedBigInteger('tenant_id')->nullable();
-            $table->foreignId('user_id')->nullable()->constrained('users')->onDelete('cascade');
+            $table->unsignedBigInteger('user_id')->nullable();
             $table->string('business_name');
             $table->string('contact_name');
             $table->string('first_name')->nullable();
@@ -46,7 +46,8 @@ return new class extends Migration
             $table->date('installation_appointment_date')->nullable();
             $table->text('customer_note')->nullable();
             $table->text('note')->nullable();
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            
+            $table->unsignedBigInteger('created_by')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

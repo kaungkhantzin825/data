@@ -20,7 +20,11 @@
                 <div class="rules-icon"><v-icon icon="mdi-alert-circle" color="#ef4444" size="20" /></div>
                 <div>
                     <div class="rules-title">Rules:</div>
-                    <div class="rules-text">Required headers: first_name (or firstname), phone (or contact_information), township, address, plan, package, etc. <a href="/sample_leads.csv" download class="rules-link">Sample CSV File</a></div>
+                    <div class="rules-text">
+                        Required columns: <strong>phone</strong>, <strong>first_name</strong>, <strong>last_name</strong>, <strong>business_name</strong>.
+                        Optional: <em>biz_type, source, division, township, address, product, package, package_total, discount, status, channel, est_contract_date, est_start_date, is_referral</em>.
+                        Download the <a href="/sample_leads.csv" download class="rules-link">Sample CSV File</a> and fill it in — column names must match exactly.
+                    </div>
                 </div>
             </div>
 
@@ -58,7 +62,7 @@ const emit = defineEmits(['upload', 'download', 'create', 'cancel']);
 const fileInput = ref(null);
 const fileName = ref('');
 const file = ref(null);
-const updateExisting = ref(false);
+const updateExisting = ref(true);
 
 const triggerUpload = () => fileInput.value.click();
 

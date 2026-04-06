@@ -7,7 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class TenantFieldOption extends Model
 {
-    use HasFactory, \App\Traits\BelongsToTenant;
+    use HasFactory;
+
+    /** Tenant field options live in the tenant's private database. */
+    protected $connection = 'tenant';
 
     protected $guarded = [];
 

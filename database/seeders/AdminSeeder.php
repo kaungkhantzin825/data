@@ -33,6 +33,9 @@ class AdminSeeder extends Seeder
             'setting_user_status' => 'User Login Status',
             'manage_plans' => 'Plan Menu',
             'manage_tenant_fields' => 'Create Setting Menu',
+            'submenu_users' => 'Users Menu (User Management)',
+            'submenu_roles' => 'Roles Menu (User Management)',
+            'submenu_permissions' => 'Permissions Menu (User Management)',
         ];
 
         foreach ($permissions as $permName => $menuName) {

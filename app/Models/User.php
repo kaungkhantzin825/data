@@ -15,12 +15,21 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable, HasRoles, SoftDeletes;
 
     /**
+     * Always use the central DB for the users table.
+     * The middleware may switch the default 'mysql' connection to a tenant DB,
+     * but users are NEVER stored in tenant databases.
+     */
+    protected $connection = 'mysql_central';
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var array<int, string>
      */
     protected $fillable = [
         'name',
+        'company_name',
+        'phone',
         'email',
         'profile_logo',
         'tenant_id',
@@ -58,7 +67,7 @@ class User extends Authenticatable
 
     public function tenant()
     {
-        return $this->belongsTo(User::class, 'tenant_id');
+        return $this->belongsTo(\App\Models\Tenant::class, 'tenant_id');
     }
 
     public function staff()

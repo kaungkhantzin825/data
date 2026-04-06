@@ -7,7 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class ActivityLog extends Model
 {
-    use HasFactory, \App\Traits\BelongsToTenant;
+    use HasFactory;
+
+    /** Activity logs are always in the central DB. */
+    protected $connection = 'mysql_central';
 
     protected $guarded = [];
 

@@ -31,6 +31,28 @@
                             </div>
 
                             <div class="fw">
+                                <div class="fbox" :class="{focused: cnf, ferr: errors.company_name}">
+                                    <v-icon icon="mdi-domain" size="17"
+                                        :color="cnf ? '#2ecc5e' : '#9ca3af'" />
+                                    <input v-model="form.company_name" type="text"
+                                        placeholder="Company Name" class="fi"
+                                        @focus="cnf=true" @blur="cnf=false" />
+                                </div>
+                                <span v-if="errors.company_name" class="emsg">{{ errors.company_name }}</span>
+                            </div>
+
+                            <div class="fw">
+                                <div class="fbox" :class="{focused: phnf, ferr: errors.phone}">
+                                    <v-icon icon="mdi-phone-outline" size="17"
+                                        :color="phnf ? '#2ecc5e' : '#9ca3af'" />
+                                    <input v-model="form.phone" type="text"
+                                        placeholder="Phone Number" class="fi"
+                                        @focus="phnf=true" @blur="phnf=false" />
+                                </div>
+                                <span v-if="errors.phone" class="emsg">{{ errors.phone }}</span>
+                            </div>
+
+                            <div class="fw">
                                 <div class="fbox" :class="{focused: ef, ferr: errors.email}">
                                     <v-icon icon="mdi-email-outline" size="17"
                                         :color="ef ? '#2ecc5e' : '#9ca3af'" />
@@ -114,6 +136,28 @@
                         </div>
 
                         <div class="fw">
+                            <div class="fbox mfbox" :class="{focused: cnf}">
+                                <v-icon icon="mdi-domain" size="17"
+                                    :color="cnf ? '#2ecc5e' : '#9ca3af'" />
+                                <input v-model="form.company_name" type="text"
+                                    placeholder="Company Name" class="fi"
+                                    @focus="cnf=true" @blur="cnf=false" />
+                            </div>
+                            <span v-if="errors.company_name" class="emsg dark">{{ errors.company_name }}</span>
+                        </div>
+
+                        <div class="fw">
+                            <div class="fbox mfbox" :class="{focused: phnf}">
+                                <v-icon icon="mdi-phone-outline" size="17"
+                                    :color="phnf ? '#2ecc5e' : '#9ca3af'" />
+                                <input v-model="form.phone" type="text"
+                                    placeholder="Phone Number" class="fi"
+                                    @focus="phnf=true" @blur="phnf=false" />
+                            </div>
+                            <span v-if="errors.phone" class="emsg dark">{{ errors.phone }}</span>
+                        </div>
+
+                        <div class="fw">
                             <div class="fbox mfbox" :class="{focused: ef}">
                                 <v-icon icon="mdi-email-outline" size="17"
                                     :color="ef ? '#2ecc5e' : '#9ca3af'" />
@@ -185,11 +229,15 @@ defineProps({ errors: { type: Object, default: () => ({}) } });
 const { smAndDown } = useDisplay();
 const showPw = ref(false);
 const nf = ref(false); 
+const cnf = ref(false);
+const phnf = ref(false);
 const ef = ref(false); 
 const pf = ref(false); 
 const cf = ref(false); 
 const form = useForm({
     name: '',
+    company_name: '',
+    phone: '',
     email: '',
     password: '',
     password_confirmation: '',

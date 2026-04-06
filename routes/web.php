@@ -37,7 +37,7 @@ Route::post('/register', [AuthController::class, 'register'])->name('register.st
 
 Route::post('/logout', [AuthController::class, 'destroy'])->name('logout')->middleware('auth');
 
-Route::get('/dashboard', [LeadController::class, 'dashboard'])->name('dashboard')->middleware('auth');
+Route::get('/dashboard', [LeadController::class, 'dashboard'])->name('dashboard')->middleware(['auth', 'tenant']);
 
 // Route::middleware('auth')->group(function () {
 //     Route::get('/leads', [LeadController::class, 'index'])->name('leads.index');
@@ -49,7 +49,7 @@ Route::get('/dashboard', [LeadController::class, 'dashboard'])->name('dashboard'
 
 
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/leads', [LeadController::class, 'index'])->name('leads.index');
     Route::get('/leads/create', [LeadController::class, 'create'])->name('leads.create');
     Route::get('/leads/upload', [LeadController::class, 'upload'])->name('leads.upload');
