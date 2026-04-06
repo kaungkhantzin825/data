@@ -15,7 +15,7 @@ class AdminSeeder extends Seeder
 
         $permissions = [
             'view_dashboard' => 'Dashboard View',
-            'view_leads' => 'View Leads List',
+            // 'view_leads' => 'View Leads List',
             'action_upload_lead' => 'Upload Lead',
             'action_download_csv' => 'Download CSV',
             'section_lead_detail' => 'Form: Lead Detail',
