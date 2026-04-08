@@ -76,19 +76,29 @@ class SalesAppController extends Controller
 
         // If the mobile app passes a status filter (e.g., 8001)
         if ($statusParam) {
-            // Check if it's a numeric ID linking to a TenantFieldOption
             if (is_numeric($statusParam)) {
                 $option = TenantFieldOption::find($statusParam);
                 if ($option) {
                     $query->where('status', $option->option_value);
                 } else {
-                    // Fallback to strict string check just in case it natively saves integer IDs
                     $query->where('status', $statusParam);
                 }
             } else {
-                // Otherwise query straight against the string (like 'Active')
                 $query->where('status', $statusParam);
             }
+        }
+
+        // Additional Query Filters requested by Mobile App
+        if ($request->filled('est_contract_date')) {
+            $query->whereDate('est_contract_date', $request->input('est_contract_date'));
+        }
+
+        if ($request->filled('contact_number')) {
+            $query->where('phone', 'like', '%' . $request->input('contact_number') . '%');
+        }
+
+        if ($request->filled('business_name')) {
+            $query->where('business_name', 'like', '%' . $request->input('business_name') . '%');
         }
 
         $leads = $query->get();
