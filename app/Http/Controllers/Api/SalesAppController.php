@@ -85,12 +85,15 @@ class SalesAppController extends Controller
     {
         $fields = TenantFieldOption::all()->groupBy('field_name');
 
-        // Helper to map dynamic db fields to the requested {"key": id, "value": text} format
-        $formatOptions = function ($keyName, $startingKey = 1000) use ($fields) {
+        // Extract straight from the database: use real database ID as the "key"!
+        $formatOptions = function ($keyName) use ($fields) {
             $options = [];
             if (isset($fields[$keyName])) {
-                foreach ($fields[$keyName]->pluck('option_value')->toArray() as $idx => $val) {
-                    $options[] = ['key' => $startingKey + $idx, 'value' => $val];
+                foreach ($fields[$keyName] as $field) {
+                    $options[] = [
+                        'key' => $field->id, 
+                        'value' => $field->option_value
+                    ];
                 }
             }
             return $options;
@@ -100,37 +103,19 @@ class SalesAppController extends Controller
             'status' => 'Success',
             'response_code' => '000',
             'description' => 'Success',
-            'sale_status' => [
-                ['key' => 8001, 'value' => 'New Lead Potential', 'weight' => '10%'],
-                ['key' => 8002, 'value' => 'Followup', 'weight' => '20%'],
-                ['key' => 8003, 'value' => 'Active', 'weight' => '100%'],
-                ['key' => 8004, 'value' => 'Pending', 'weight' => '50%'],
-            ],
-            'sale_source' => (!empty($formatOptions('source'))) ? $formatOptions('source', 4000) : [['key' => 4000, 'value' => 'Door to Door']],
-            'sale_business_type' => (!empty($formatOptions('biz_type'))) ? $formatOptions('biz_type', 5000) : [['key' => 5000, 'value' => 'Condo']],
-            'sale_sme' => [
-                ['key' => 9000, 'value' => 'Automotive']
-            ],
-            'sale_designation' => [
-                ['key' => 'D0001', 'value' => 'CEO']
-            ],
-            'division' => (!empty($formatOptions('division'))) ? $formatOptions('division', 5000) : [['key' => 5000, 'value' => 'Yangon']],
-            'township' => (!empty($formatOptions('township'))) ? $formatOptions('township', 21000) : [['key' => 21000, 'value' => 'Dagon']],
-            'followup_via' => [
-                ['key' => 10, 'value' => 'In Person']
-            ],
-            'discount' => [
-                ['key' => 0, 'value' => '0%']
-            ],
-            'plan' => [
-                ['key' => 11000, 'value' => 'Premium Home Fiber']
-            ],
-            'package' => [
-                ['key' => '300Mbps', 'value' => '300000', 'plan' => 'Mojoenet Elite']
-            ],
-            'customer_type' => [
-                ['key' => 'consumer', 'value' => 'Consumer']
-            ]
+            // Retrieve strictly from dynamic Option tables
+            'sale_status' => $formatOptions('status'),
+            'sale_source' => $formatOptions('source'),
+            'sale_business_type' => $formatOptions('biz_type'),
+            'sale_sme' => $formatOptions('sme'),
+            'sale_designation' => $formatOptions('designation'),
+            'division' => $formatOptions('division'),
+            'township' => $formatOptions('township'),
+            'followup_via' => $formatOptions('followup_via'),
+            'discount' => $formatOptions('discount'),
+            'plan' => $formatOptions('plan'),
+            'package' => $formatOptions('package'),
+            'customer_type' => $formatOptions('customer_type'),
         ], 200, [], JSON_UNESCAPED_SLASHES);
     }
 
