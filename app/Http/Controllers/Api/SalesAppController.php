@@ -75,14 +75,24 @@ class SalesAppController extends Controller
 
         $query = Lead::orderBy('id', 'desc');
 
-        // Apply UID filter if provided (restored)
+        // Apply UID filter if provided
         if (!empty($uidParam)) {
             $query->where('created_by', $uidParam);
         }
 
         // Apply Status filter
         if ($request->filled('status')) {
-            if (is_numeric($statusParam)) {
+            // Mobile App intercepts: Translating arbitrary app numeric IDs to physical DB string values
+            $legacyStatusMap = [
+                '8001' => 'New Lead Potential',
+                '8002' => 'Followup',
+                '8003' => 'Active',
+                '8004' => 'Pending'
+            ];
+
+            if (isset($legacyStatusMap[$statusParam])) {
+                $query->where('status', $legacyStatusMap[$statusParam]);
+            } else if (is_numeric($statusParam)) {
                 $option = TenantFieldOption::find($statusParam);
                 if ($option) {
                     $query->where('status', $option->option_value);
