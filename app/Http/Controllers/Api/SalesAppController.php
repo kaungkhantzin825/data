@@ -70,15 +70,56 @@ class SalesAppController extends Controller
    
     public function getLeadList(Request $request)
     {
-        $uid = $request->input('uid');
-        $user = auth()->user();
+        $statusParam = $request->input('status');
 
-        $leads = Lead::orderBy('id', 'desc')->get();
+        $query = Lead::orderBy('id', 'desc');
 
+        // If the mobile app passes a status filter (e.g., 8001)
+        if ($statusParam) {
+            // Check if it's a numeric ID linking to a TenantFieldOption
+            if (is_numeric($statusParam)) {
+                $option = TenantFieldOption::find($statusParam);
+                if ($option) {
+                    $query->where('status', $option->option_value);
+                } else {
+                    // Fallback to strict string check just in case it natively saves integer IDs
+                    $query->where('status', $statusParam);
+                }
+            } else {
+                // Otherwise query straight against the string (like 'Active')
+                $query->where('status', $statusParam);
+            }
+        }
+
+        $leads = $query->get();
+
+        // Strictly map the raw Database properties into the Mobile App's required custom Dictionary format
+        $mappedDetails = $leads->map(function ($lead) {
+            return [
+                'lid'               => (string) $lead->id,
+                'business_name'     => $lead->business_name,
+                'status'            => $lead->status,
+                'firstname'         => $lead->first_name ?? $lead->contact_name,
+                'followup_date'     => $lead->est_follow_up_date,
+                'follow_up_date'    => $lead->est_follow_up_date,
+                'contactno'         => $lead->phone,
+                'package'           => $lead->package,
+                'plan'              => $lead->amount, // Note: In their provided example, plan held '15000' amount
+                'lead_assign'       => null,
+                'created_by'        => (string) $lead->created_by,
+                'est_contract_date' => $lead->est_contract_date,
+            ];
+        });
+
+        // Exact Outer Envelope Structure
         return response()->json([
-            'status' => 'success',
-            'data' => $leads
-        ]);
+            'status'              => 'Success',
+            'response_code'       => '000',
+            'description'         => 'Success',
+            'is_requiered_update' => false,
+            'isforce_update'      => false,
+            'details'             => $mappedDetails
+        ], 200, [], JSON_UNESCAPED_SLASHES);
     }
 
     public function getSaleDdlData(Request $request)
