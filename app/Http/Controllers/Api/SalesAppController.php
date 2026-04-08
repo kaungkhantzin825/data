@@ -70,12 +70,18 @@ class SalesAppController extends Controller
    
     public function getLeadList(Request $request)
     {
+        $uidParam = $request->input('uid');
         $statusParam = $request->input('status');
 
         $query = Lead::orderBy('id', 'desc');
 
-        // If the mobile app passes a status filter (e.g., 8001)
-        if ($statusParam) {
+        // Apply UID filter if provided (restored)
+        if (!empty($uidParam)) {
+            $query->where('created_by', $uidParam);
+        }
+
+        // Apply Status filter
+        if ($request->filled('status')) {
             if (is_numeric($statusParam)) {
                 $option = TenantFieldOption::find($statusParam);
                 if ($option) {
