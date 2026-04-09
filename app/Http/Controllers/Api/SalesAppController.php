@@ -84,7 +84,7 @@ class SalesAppController extends Controller
         if ($request->filled('status')) {
             // Mobile App intercepts: Translating arbitrary app numeric IDs to physical DB string values
             $legacyStatusMap = [
-                '8001' => 'New Lead Potential',
+                '8001' => 'New',
                 '8002' => 'Followup',
                 '8003' => 'Active',
                 '8004' => 'Pending'
