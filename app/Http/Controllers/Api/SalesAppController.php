@@ -251,74 +251,47 @@ class SalesAppController extends Controller
   
     public function postLeadForm(Request $request)
     {
-        // Parse mobile app status mappings back to physical Database String
-        $incomingStatus = $request->input('status', 'New');
-        if ($incomingStatus === 'New Lead') {
-            $incomingStatus = 'New';
-        }
-
         $data = [
-            'biz_type'           => $request->input('business_type'),
-            'source'             => $request->input('source', $request->input('lead_source')),
-            'phone'              => $request->input('contact_number'),
-            // Map 'contact_person' as requested by their JSON
-            'contact_name'       => $request->input('contact_person', $request->input('name')), 
-            'first_name'         => $request->input('contact_person', $request->input('name')),
+            'biz_type'      => $request->input('business_type'),
+            'source'        => $request->input('lead_source', $request->input('source')),
+            'phone'         => $request->input('contact_number'),
+            'contact_name'  => $request->input('name', $request->input('business_name')), // Ensures database requirement is met
+            'first_name'    => $request->input('name'),
             'secondary_contact_number' => $request->input('secondary_contact_number'),
-            // Handle the specific 'emiail' typo exactly as written in their JSON payload
-            'contact_email'      => $request->input('emiail', $request->input('email')),
-            'business_name'      => $request->input('business_name'),
-            'division'           => $request->input('division'),
-            'township'           => $request->input('township'),
-            'address'            => $request->input('address'),
-            'status'             => $incomingStatus,
-            'business_category'  => $request->input('sme'),
-            'designation'        => $request->input('designation'),
-            'potential'          => $request->input('potential'),
-            'product'            => $request->input('product'),
-            'amount'             => $request->input('amount', 0),
-            'plan'               => $request->input('plan'),
-            'package'            => $request->input('package'),
-            'discount'           => $request->input('discount'),
-            'meeting_note'       => $request->input('meeting_notes'),
-            'next_step'          => $request->input('next_step'),
+            'contact_email' => $request->input('email'),
+            'business_name' => $request->input('business_name'),
+            'division'      => $request->input('division'),
+            'township'      => $request->input('township'),
+            'address'       => $request->input('address'),
+            'status'        => $request->input('status', 'New'),
+            'product'       => $request->input('product'),
+            'amount'        => $request->input('amount', 0),
+            'plan'          => $request->input('plan'),
+            'package'       => $request->input('package'),
+            'discount'      => $request->input('discount'),
+            'meeting_note'  => $request->input('meeting_notes'),
+            'next_step'     => $request->input('next_step'),
         ];
 
         $data = array_filter($data, fn($v) => !is_null($v));
-
-        // Use 'uid' securely from JSON if provided, otherwise fallback to Auth
-        if (!isset($data['created_by']) && $request->filled('uid')) {
-            $data['created_by'] = $request->input('uid');
-        } elseif (!isset($data['created_by'])) {
-            $data['created_by'] = auth()->id();
-        }
 
         $lid = $request->input('lid');
         if (!empty($lid)) {
             $lead = Lead::find($lid);
             if ($lead) {
                 $lead->update($data);
-                return response()->json([
-                    'status'              => 'Success',
-                    'response_code'       => '000',
-                    'description'         => 'Lead updated successfully.',
-                    'is_requiered_update' => false,
-                    'isforce_update'      => false,
-                    'details'             => $lead // Or leave empty [] depending on App preference
-                ], 200, [], JSON_UNESCAPED_SLASHES);
+                return response()->json(['status' => 'success', 'message' => 'Lead updated successfully.', 'data' => $lead]);
             }
         }
 
+        $data['created_by'] = auth()->id();
         $lead = Lead::create($data);
 
         return response()->json([
-            'status'              => 'Success',
-            'response_code'       => '000',
-            'description'         => 'Lead created successfully.',
-            'is_requiered_update' => false,
-            'isforce_update'      => false,
-            'details'             => $lead
-        ], 200, [], JSON_UNESCAPED_SLASHES);
+            'status' => 'success',
+            'message' => 'Lead created successfully.',
+            'data' => $lead
+        ]);
     }
 
     public function getContractedLeadList(Request $request)
@@ -446,46 +419,52 @@ class SalesAppController extends Controller
 
     public function postContractedData(Request $request)
     {
-        $leadId = $request->input('leadId') ?? $request->input('profile_id');
+        $profileId = $request->input('profile_id');
+        $uid = $request->input('uid');
 
-        if (!$leadId) {
-            return response()->json(['status' => 'error', 'message' => 'Lead identifier required.'], 400);
+        if (!$profileId) {
+            return response()->json(['status' => 'error', 'message' => 'Profile ID identifier required.'], 400);
         }
 
-        $lead = Lead::where('id', $leadId)->orWhere('uuid', $leadId)->first();
+        $lead = Lead::where('id', $profileId)->orWhere('uuid', $profileId)->first();
 
+        // Exact mapping from the mobile app's JSON requirement
         $data = [
-            'phone'               => $request->input('contact_number', $lead->phone ?? null),
+            'phone'               => $request->input('contact_no'),
             'address'             => $request->input('address'),
             'package'             => $request->input('package'),
             'plan'                => $request->input('plan'),
             'first_name'          => $request->input('name'),
-            'business_name'       => $request->input('business_name'),
-            'secondary_contact_number' => $request->input('secondary_contact_number'),
+            'contact_name'        => $request->input('name', $lead->contact_name ?? null),
             'contact_email'       => $request->input('email'),
             'division'            => $request->input('division'),
             'township'            => $request->input('township'),
-            'est_contract_date'   => $request->input('contracted_date'),   
-            'installation_appointment' => $request->input('installation_appointment_date'), 
-            'note'                => $request->input('customer_note'),
-            'amount'              => $request->input('amount'),
         ];
 
-        
         $data = array_filter($data, fn($v) => !is_null($v));
 
         if (!$lead) {
-            $data['created_by'] = auth()->id();
+            $data['created_by'] = $uid ?? auth()->id();
             $lead = Lead::create($data);
-            return response()->json(['status' => 'success', 'message' => 'Lead contracted successfully.', 'data' => $lead]);
+            return response()->json([
+                'status'              => 'Success',
+                'response_code'       => '000',
+                'description'         => 'Lead contracted successfully.',
+                'is_requiered_update' => false,
+                'isforce_update'      => false,
+                'details'             => $lead
+            ], 200, [], JSON_UNESCAPED_SLASHES);
         }
 
         $lead->update($data);
-
+        
         return response()->json([
-            'status'  => 'success',
-            'message' => 'Contract details updated successfully.',
-            'data'    => $lead
-        ]);
+            'status'              => 'Success',
+            'response_code'       => '000',
+            'description'         => 'Lead updated successfully.',
+            'is_requiered_update' => false,
+            'isforce_update'      => false,
+            'details'             => $lead
+        ], 200, [], JSON_UNESCAPED_SLASHES);
     }
 }
