@@ -80,29 +80,8 @@ class SalesAppController extends Controller
             $query->where('created_by', $uidParam);
         }
 
-        // Apply Status filter
-        if ($request->filled('status')) {
-            // Mobile App intercepts: Translating arbitrary app numeric IDs to physical DB string values
-            $legacyStatusMap = [
-                '8001' => 'New',
-                '8002' => 'Followup',
-                '8003' => 'Active',
-                '8004' => 'Pending'
-            ];
-
-            if (isset($legacyStatusMap[$statusParam])) {
-                $query->where('status', $legacyStatusMap[$statusParam]);
-            } else if (is_numeric($statusParam)) {
-                $option = TenantFieldOption::find($statusParam);
-                if ($option) {
-                    $query->where('status', $option->option_value);
-                } else {
-                    $query->where('status', $statusParam);
-                }
-            } else {
-                $query->where('status', $statusParam);
-            }
-        }
+        // Status filter heavily restricted/removed as per explicit request
+        // The mobile app will handle filtering if necessary, or the query defaults to all.
 
         // Additional Query Filters requested by Mobile App
         if ($request->filled('est_contract_date')) {
