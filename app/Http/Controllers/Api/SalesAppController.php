@@ -174,10 +174,78 @@ class SalesAppController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Lead not found.'], 404);
         }
 
+        // Mock status mapping to fulfill Mobile App's expectation
+        $statusKey = '8001';
+        if ($lead->status === 'New') $statusKey = '8001';
+        elseif ($lead->status === 'Followup') $statusKey = '8002';
+        elseif ($lead->status === 'Active') $statusKey = '8003';
+        elseif ($lead->status === 'Pending') $statusKey = '8004';
+        
+        $statusName = $lead->status;
+        if ($lead->status === 'New') $statusName = 'New Lead Potential';
+
         return response()->json([
-            'status' => 'success',
-            'data' => $lead
-        ]);
+            'status'              => 'Success',
+            'response_code'       => '000',
+            'description'         => 'Success',
+            'is_requiered_update' => false,
+            'isforce_update'      => false,
+            'details'             => [
+                'lid'                 => (string) $lead->id,
+                'uid'                 => null,
+                'profile_id'          => null,
+                'customer_type'       => null,
+                'firstname'           => $lead->first_name ?? $lead->contact_name,
+                'lastname'            => $lead->last_name,
+                'email'               => $lead->contact_email,
+                'address'             => $lead->address,
+                'contact_information' => null,
+                'package'             => $lead->package,
+                'plan'                => $lead->plan,
+                'notes'               => $lead->note,
+                'installation'        => null,
+                'lead_source'         => $lead->source,
+                'business_type'       => $lead->biz_type,
+                'business_category'   => null,
+                'township'            => $lead->township,
+                'division'            => $lead->division,
+                'contactno'           => $lead->phone,
+                'business_name'       => $lead->business_name,
+                'current_isp'         => null,
+                'potential'           => (string) $lead->potential,
+                'weighted'            => $lead->weighted,
+                'followup_via'        => null,
+                'followup_date'       => $lead->est_follow_up_date,
+                'estimate_flightdate' => null,
+                'channel'             => $lead->channel,
+                'designation'         => null,
+                'compound'            => null,
+                'created_by'          => (string) $lead->created_by,
+                'updated_by'          => (string) $lead->created_by,
+                'creation_date'       => $lead->created_at ? $lead->created_at->format('Y-m-d H:i:s') : null,
+                'modified_date'       => $lead->updated_at ? $lead->updated_at->format('Y-m-d H:i:s') : null,
+                'status_key'          => $statusKey,
+                'status'              => $statusName,
+                'package_total'       => (string) $lead->amount,
+                'referrel_id'         => null,
+                'lead_assign'         => null,
+                'isReferal'           => $lead->is_referral ? "1" : "0",
+                'designation_other'   => null,
+                'business_type_other' => null,
+                'secondary_contact_number' => $lead->secondary_contact_number,
+                'discount'            => $lead->discount ? $lead->discount . '%' : "0%",
+                'meeting_notes'       => $lead->meeting_note,
+                'next_step'           => $lead->next_step,
+                'est_contract_date'   => $lead->est_contract_date,
+                'est_start_date'      => $lead->est_start_date,
+                'follow_up_date'      => $lead->est_follow_up_date,
+                'latitude'            => null,
+                'longitude'           => null,
+                'contract_date'       => $lead->contracted_date,
+                'installation_appointment_date' => $lead->installation_appointment,
+                'customer_note'       => $lead->customer_note
+            ]
+        ], 200, [], JSON_UNESCAPED_SLASHES);
     }
 
   
