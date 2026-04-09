@@ -296,13 +296,42 @@ class SalesAppController extends Controller
 
     public function getContractedLeadList(Request $request)
     {
-        $user = auth()->user();
-         $leads = Lead::whereNotNull('est_contract_date')->orderBy('id', 'desc')->get();
+        $uidParam = $request->input('uid');
+
+        // Query contracted leads
+        $query = Lead::whereNotNull('est_contract_date')->orderBy('id', 'desc');
+
+        if (!empty($uidParam)) {
+            $query->where('created_by', $uidParam);
+        }
+
+        if ($request->filled('business_name')) {
+            $query->where('business_name', 'like', '%' . $request->input('business_name') . '%');
+        }
+
+        $leads = $query->get();
+
+        $mappedDetails = $leads->map(function ($lead) {
+            $statusName = $lead->status;
+            if ($statusName === 'New') $statusName = 'New Lead Potential';
+
+            return [
+                'profile_id'          => $lead->uuid ?? (string) $lead->id,
+                'business_name'       => $lead->business_name,
+                'status'              => $statusName,
+                'contact_information' => $lead->phone ?? $lead->contact_information,
+                'sign'                => '/esignature/' . ($lead->uuid ?? $lead->id) . '/app'
+            ];
+        });
 
         return response()->json([
-            'status' => 'success',
-            'data' => $leads
-        ]);
+            'status'              => 'Success',
+            'response_code'       => '000',
+            'description'         => 'Success',
+            'is_requiered_update' => false,
+            'isforce_update'      => false,
+            'details'             => $mappedDetails
+        ], 200, [], JSON_UNESCAPED_SLASHES);
     }
 
     public function getContractedDetail(Request $request)
