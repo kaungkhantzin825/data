@@ -230,7 +230,7 @@ class SalesAppController extends Controller
             'followup_via' => $formatOptions('followup_via'),
             'discount' => $formatOptions('discount'),
             'plan' => $formatOptions('plan'),
-            'package' => $formatOptions('package'),
+            'packages' => $formatOptions('package'),
             'customer_type' => $formatOptions('customer_type'),
         ], 200, [], JSON_UNESCAPED_SLASHES);
     }
