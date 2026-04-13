@@ -65,20 +65,56 @@
                                 
                                 <form @submit.prevent="addOption" style="display:flex; gap:16px; align-items:flex-end; margin-bottom: 24px;">
                                     <div class="form-group" style="flex:1;">
-                                        <label>New {{ currentFieldLabel }} Option</label>
-                                        <input type="text" v-model="newOptionVal" class="form-input" placeholder="Enter new option value" required />
+                                        
+                                        <div v-if="activeField === 'package'" style="display:flex; gap:10px;">
+                                           <div style="flex:1">
+                                              <label>Package Name (Key)</label>
+                                              <input type="text" v-model="newOptionVal" class="form-input" placeholder="e.g. 300Mbps" required />
+                                           </div>
+                                           <div style="flex:1">
+                                              <label>Price/Cost (Value)</label>
+                                              <input type="text" v-model="newOptionWeight" class="form-input" placeholder="e.g. 300000" />
+                                           </div>
+                                           <div style="flex:1">
+                                              <label>Plan Name</label>
+                                              <input type="text" v-model="newOptionPlan" class="form-input" placeholder="e.g. Mojoenet Elite" />
+                                           </div>
+                                        </div>
+
+                                        <div v-else-if="activeField === 'status'" style="display:flex; gap:10px;">
+                                           <div style="flex:1">
+                                              <label>Status Name (Key)</label>
+                                              <input type="text" v-model="newOptionVal" class="form-input" placeholder="e.g. New Lead Potential" required />
+                                           </div>
+                                           <div style="flex:0.5">
+                                              <label>Weight</label>
+                                              <input type="text" v-model="newOptionWeight" class="form-input" placeholder="e.g. 10%" />
+                                           </div>
+                                        </div>
+
+                                        <div v-else>
+                                            <label>New {{ currentFieldLabel }} Option</label>
+                                            <input type="text" v-model="newOptionVal" class="form-input" placeholder="Enter new option value" required />
+                                        </div>
                                     </div>
                                     <button type="submit" class="btn-solid-green" style="height: 42px;" :disabled="isProcessing">
                                         <v-icon icon="mdi-plus" style="margin-right:4px;" size="16" /> Add
                                     </button>
                                 </form>
 
-                               
                                 <div style="overflow-x: auto; width: 100%;">
                                     <table class="data-table">
                                         <thead>
                                             <tr>
-                                                <th>Option Value</th>
+                                                <th v-if="activeField === 'package'">Package / Key</th>
+                                                <th v-else-if="activeField === 'status'">Status Label</th>
+                                                <th v-else>Option Value</th>
+
+                                                <th v-if="activeField === 'package'">Price</th>
+                                                <th v-if="activeField === 'package'">Plan</th>
+                                                
+                                                <th v-if="activeField === 'status'">Weight</th>
+                                                
                                                 <th style="width:150px; text-align:right;">Actions</th>
                                             </tr>
                                         </thead>
@@ -86,12 +122,31 @@
                                             <tr v-for="opt in currentOptions" :key="opt.id">
                                                 <td>
                                                     <div v-if="editingId === opt.id" style="display:flex; gap:8px;">
-                                                        <input type="text" v-model="editingVal" class="form-input" style="padding:4px 8px; font-size:14px; height:32px;" />
-                                                        <button @click="updateOption(opt.id)" style="color:green; font-weight:600; font-size:13px; background:transparent; border:none; cursor:pointer;">Save</button>
-                                                        <button @click="editingId = null" style="color:gray; font-size:13px; background:transparent; border:none; cursor:pointer;">Cancel</button>
+                                                        <input type="text" v-model="editingVal" class="form-input" style="padding:4px 8px; font-size:14px; height:32px; width:120px;" />
                                                     </div>
                                                     <span v-else>{{ opt.option_value }}</span>
                                                 </td>
+
+                                                <td v-if="activeField === 'package'">
+                                                    <div v-if="editingId === opt.id" style="display:flex; gap:8px;">
+                                                        <input type="text" v-model="editingWeight" class="form-input" placeholder="Price" style="padding:4px 8px; font-size:14px; height:32px; width:80px;" />
+                                                    </div>
+                                                    <span v-else>{{ opt.weight }}</span>
+                                                </td>
+                                                <td v-if="activeField === 'package'">
+                                                    <div v-if="editingId === opt.id" style="display:flex; gap:8px;">
+                                                        <input type="text" v-model="editingPlan" class="form-input" placeholder="Plan" style="padding:4px 8px; font-size:14px; height:32px; width:120px;" />
+                                                    </div>
+                                                    <span v-else>{{ opt.plan }}</span>
+                                                </td>
+
+                                                <td v-if="activeField === 'status'">
+                                                    <div v-if="editingId === opt.id" style="display:flex; gap:8px;">
+                                                        <input type="text" v-model="editingWeight" class="form-input" placeholder="Weight" style="padding:4px 8px; font-size:14px; height:32px; width:80px;" />
+                                                    </div>
+                                                    <span v-else>{{ opt.weight }}</span>
+                                                </td>
+
                                                 <td class="action-td">
                                                     <div class="btn-wrap">
                                                         <div v-if="editingId === opt.id" style="display:flex; gap:8px;">
@@ -110,7 +165,7 @@
                                                 </td>
                                             </tr>
                                             <tr v-if="!currentOptions.length">
-                                                <td colspan="2" class="text-center" style="padding:20px; color:#9ca3af; font-style:italic;">No options configured for {{ currentFieldLabel }}.</td>
+                                                <td :colspan="activeField === 'package' ? 4 : (activeField === 'status' ? 3 : 2)" class="text-center" style="padding:20px; color:#9ca3af; font-style:italic;">No options configured for {{ currentFieldLabel }}.</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -153,6 +208,7 @@ const dynamicFields = [
     { key: 'product', label: 'Product', icon: 'mdi-package-variant-closed' },
     { key: 'channel', label: 'Channel', icon: 'mdi-set-top-box' },
     { key: 'package', label: 'Package', icon: 'mdi-cube-outline' },
+    { key: 'status', label: 'Sale Status', icon: 'mdi-list-status' },
 ];
 
 const activeField = ref('biz_type');
@@ -163,15 +219,24 @@ const currentOptions = computed(() => {
 });
 
 const newOptionVal = ref('');
+const newOptionPlan = ref('');
+const newOptionWeight = ref('');
+
 const isProcessing = ref(false);
 
 const editingId = ref(null);
 const editingVal = ref('');
+const editingPlan = ref('');
+const editingWeight = ref('');
 
 const resetForms = () => {
     newOptionVal.value = '';
+    newOptionPlan.value = '';
+    newOptionWeight.value = '';
     editingId.value = null;
     editingVal.value = '';
+    editingPlan.value = '';
+    editingWeight.value = '';
 };
 
 const addOption = () => {
@@ -179,11 +244,13 @@ const addOption = () => {
     isProcessing.value = true;
     router.post('/settings/tenant-fields', {
         field_name: activeField.value,
-        option_value: newOptionVal.value
+        option_value: newOptionVal.value,
+        plan: newOptionPlan.value,
+        weight: newOptionWeight.value
     }, {
         preserveScroll: true,
         onSuccess: () => {
-            newOptionVal.value = '';
+            resetForms();
             isProcessing.value = false;
             Swal.fire({
                 icon: 'success',
@@ -203,12 +270,16 @@ const addOption = () => {
 const startEdit = (opt) => {
     editingId.value = opt.id;
     editingVal.value = opt.option_value;
+    editingPlan.value = opt.plan || '';
+    editingWeight.value = opt.weight || '';
 };
 
 const updateOption = (id) => {
     if (!editingVal.value.trim()) return;
     router.put(`/settings/tenant-fields/${id}`, {
-        option_value: editingVal.value
+        option_value: editingVal.value,
+        plan: editingPlan.value,
+        weight: editingWeight.value
     }, {
         preserveScroll: true,
         onSuccess: () => {

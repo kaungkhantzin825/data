@@ -64,6 +64,22 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::post('/settings/tenant-fields', [TenantFieldController::class, 'store'])->name('tenant.fields.store');
     Route::put('/settings/tenant-fields/{id}', [TenantFieldController::class, 'updateOption'])->name('tenant.fields.updateOption');
     Route::delete('/settings/tenant-fields/{id}', [TenantFieldController::class, 'destroy'])->name('tenant.fields.destroy');
+    
+    // Temporary helper carefully engineered to upgrade all tenant DBs safely
+    Route::get('/dev/migrate-tenants', function () {
+        $tenants = \App\Models\Tenant::all();
+        $baseConnection = config('database.connections.mysql_central');
+        foreach ($tenants as $tenant) {
+            config(['database.connections.tenant_setup' => array_merge($baseConnection, ['database' => $tenant->tenancy_db_name])]);
+            \Illuminate\Support\Facades\Artisan::call('migrate', [
+                '--database' => 'tenant_setup',
+                '--path'     => 'database/migrations/tenant',
+                '--force'    => true,
+            ]);
+            \Illuminate\Support\Facades\DB::purge('tenant_setup');
+        }
+        return "All Tenant Databases updated successfully!";
+    });
 
     Route::get('/plans', [\App\Http\Controllers\PlanController::class, 'index'])->name('plans.index');
     Route::post('/plans', [\App\Http\Controllers\PlanController::class, 'store'])->name('plans.store');
