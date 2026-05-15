@@ -53,6 +53,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/leads', [LeadController::class, 'index'])->name('leads.index');
     Route::get('/leads/create', [LeadController::class, 'create'])->name('leads.create');
     Route::get('/leads/upload', [LeadController::class, 'upload'])->name('leads.upload');
+    Route::get('/leads/{lead}', [LeadController::class, 'show'])->name('leads.show');
     
     Route::post('/leads/import', [LeadController::class, 'import'])->name('leads.import');
     Route::get('/leads/export', [LeadController::class, 'export'])->name('leads.export');
@@ -65,7 +66,6 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::put('/settings/tenant-fields/{id}', [TenantFieldController::class, 'updateOption'])->name('tenant.fields.updateOption');
     Route::delete('/settings/tenant-fields/{id}', [TenantFieldController::class, 'destroy'])->name('tenant.fields.destroy');
     
-    // Temporary helper carefully engineered to upgrade all tenant DBs safely
     Route::get('/dev/migrate-tenants', function () {
         $tenants = \App\Models\Tenant::all();
         $baseConnection = config('database.connections.mysql_central');

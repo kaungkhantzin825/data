@@ -63,16 +63,30 @@
                     <tr>
                         <th>#</th>
                         <th>Business Name</th>
-                        <th>Contact Information</th>
+                        <th>First Name</th>
+                        <th>Last Name</th>
+                        <th>Email</th>
                         <th>Phone</th>
-                        <th>Township</th>
+                        <th>Secondary Phone</th>
                         <th>Biz Type</th>
                         <th>Source</th>
-                        <th>Weighted</th>
-                        <th>Potential</th>
+                        <th>Division</th>
+                        <th>Township</th>
+                        <th>Address</th>
+                        <th>Product</th>
                         <th>Package</th>
-                        <th>Plan</th>
-                        <th>Amount</th>
+                        <th>Package Total</th>
+                        <th>Discount</th>
+                        <th>Note</th>
+                        <th>Status</th>
+                        <th>Channel</th>
+                        <th>Installation Appt</th>
+                        <th>Est. Contract Date</th>
+                        <th>Est. Start Date</th>
+                        <th>Est. Follow Up</th>
+                        <th>Referral</th>
+                        <th>Meeting Note</th>
+                        <th>Next Step</th>
                         <th>Action</th>
                     </tr>
                 </thead>
@@ -80,25 +94,45 @@
                     <tr v-for="(lead, i) in leads.data" :key="lead.id" :class="{stripe: i % 2 === 1}">
                         <td>{{ (leads.from ?? 0) + i }}</td>
                         <td>{{ lead.business_name }}</td>
-                        <td>{{ lead.contact_name }}</td>
+                        <td>{{ lead.first_name }}</td>
+                        <td>{{ lead.last_name }}</td>
+                        <td>{{ lead.contact_email }}</td>
                         <td>{{ lead.phone }}</td>
-                        <td>{{ lead.township }}</td>
+                        <td>{{ lead.secondary_contact_number }}</td>
                         <td>{{ lead.biz_type }}</td>
                         <td>{{ lead.source }}</td>
-                        <td>{{ lead.weighted }}</td>
-                        <td>{{ lead.potential }}</td>
+                        <td>{{ lead.division }}</td>
+                        <td>{{ lead.township }}</td>
+                        <td>{{ lead.address }}</td>
+                        <td>{{ lead.product }}</td>
                         <td>{{ lead.package }}</td>
-                        <td>{{ lead.plan }}</td>
-                        <td>{{ Number(lead.amount).toLocaleString() }}</td>
+                        <td>{{ lead.package_total ? Number(lead.package_total).toLocaleString() : '' }}</td>
+                        <td>{{ lead.discount ? Number(lead.discount).toLocaleString() : '' }}</td>
+                        <td>{{ lead.note }}</td>
+                        <td>{{ lead.status }}</td>
+                        <td>{{ lead.channel }}</td>
+                        <td>{{ lead.installation_appointment }}</td>
+                        <td>{{ lead.est_contract_date }}</td>
+                        <td>{{ lead.est_start_date }}</td>
+                        <td>{{ lead.est_follow_up_date }}</td>
+                        <td>{{ lead.is_referral ? 'Yes' : 'No' }}</td>
+                        <td>{{ lead.meeting_note }}</td>
+                        <td>{{ lead.next_step }}</td>
                         <td>
-                            <button class="btn-edit" @click="$emit('edit', lead)">
-                                <v-icon icon="mdi-pencil" size="12" />
-                                Edit
-                            </button>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn-edit" @click="$emit('view', lead)" style="background: #3b82f6;">
+                                    <v-icon icon="mdi-eye" size="12" />
+                                    Detail
+                                </button>
+                                <button class="btn-edit" @click="$emit('edit', lead)">
+                                    <v-icon icon="mdi-pencil" size="12" />
+                                    Edit
+                                </button>
+                            </div>
                         </td>
                     </tr>
                     <tr v-if="!leads.data?.length">
-                        <td colspan="13" class="empty-row">No records found.</td>
+                        <td colspan="27" class="empty-row">No records found.</td>
                     </tr>
                 </tbody>
             </table>
@@ -128,7 +162,7 @@ const props = defineProps({
     availableBizTypes: { type: Array, default: () => [] }
 });
 
-const emit = defineEmits(['upload', 'download', 'apply', 'reset', 'edit', 'page']);
+const emit = defineEmits(['upload', 'download', 'apply', 'reset', 'edit', 'view', 'page']);
 
 const page = usePage();
 const auth = computed(() => page.props.auth?.user);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Lead;
+use App\Models\Tenant;
 use App\Models\TenantFieldOption;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -251,6 +252,17 @@ class LeadController extends Controller
         return redirect()->route('leads.index');
     }
 
+    public function show($id)
+    {
+        $lead = Lead::where(function ($query) use ($id) {
+            $query->where('uuid', $id)->orWhere('id', $id);
+        })->with('creator:id,name')->firstOrFail();
+
+        return Inertia::render('LeadDetail', [
+            'lead' => $lead
+        ]);
+    }
+
     public function update(Request $request, $id)
     {
         $q = Lead::where(function ($query) use ($id) {
@@ -332,14 +344,14 @@ class LeadController extends Controller
         ];
 
         $csvColumns = [
-            'id', 'uuid', 'business_name', 'first_name', 'last_name',
+            'business_name', 'first_name', 'last_name',
             'contact_email', 'phone', 'secondary_contact_number',
             'biz_type', 'source', 'division', 'township', 'address',
-            'product', 'package', 'package_total', 'discount',
+            'product', 'package', 'package_total', 'discount', 'note',
             'status', 'channel',
             'installation_appointment', 'est_contract_date',
             'est_start_date', 'est_follow_up_date',
-            'is_referral', 'meeting_note', 'next_step', 'created_at',
+            'is_referral', 'meeting_note', 'next_step',
         ];
 
         $callback = function () use ($leads, $csvColumns) {
@@ -347,11 +359,9 @@ class LeadController extends Controller
             fputcsv($file, $csvColumns);
 
             foreach ($leads as $lead) {
-                
+                // Split contact_name into first_name and last_name
                 $nameParts = explode(' ', $lead->contact_name ?? '', 2);
                 fputcsv($file, [
-                    $lead->id,
-                    $lead->uuid,
                     $lead->business_name,
                     $nameParts[0] ?? '',
                     $nameParts[1] ?? '',
@@ -367,6 +377,7 @@ class LeadController extends Controller
                     $lead->package,
                     $lead->package_total,
                     $lead->discount,
+                    $lead->note,
                     $lead->status,
                     $lead->channel,
                     $lead->installation_appointment,
@@ -376,7 +387,6 @@ class LeadController extends Controller
                     $lead->is_referral ? 'Yes' : 'No',
                     $lead->meeting_note,
                     $lead->next_step,
-                    $lead->created_at ? $lead->created_at->format('Y-m-d H:i:s') : ''
                 ]);
             }
             fclose($file);
@@ -410,6 +420,10 @@ class LeadController extends Controller
         $nullSkip       = 0;  
         $errors         = 0;
         $errorDetails   = [];
+
+        // Get tenant ID for saving dropdown options
+        $user = auth()->user();
+        $tenantId = $user->tenant_id ? Tenant::find($user->tenant_id)->user_id : $user->id;
 
         $parseDate = function (?string $value, bool $withTime = false): ?string {
             if (!$value || trim($value) === '') return null;
@@ -453,24 +467,24 @@ class LeadController extends Controller
                 continue;
             }
 
+            // Check for duplicate by phone number only (only when update mode is enabled)
             $existing = null;
-            if ($phone) {
-                $q = Lead::where('phone', $phone);
-                $existing = $q->first();
+            $businessName = $get(['business_name', 'business name', 'company', 'company_name']);
+            
+            if ($phone && $updateExisting) {
+                // Only check for duplicates when update mode is enabled
+                $existing = Lead::where('phone', $phone)->first();
             }
 
-            if ($existing) {
-                if ($updateExisting) {
-                } else {
-                    $existing = null;
-                }
+            if ($existing && $updateExisting) {
+                // Will update this existing lead (handled later)
             }
 
             $refRaw     = strtolower($get(['is_referral', 'referral', 'ref']) ?? 'no');
             $isReferral = in_array($refRaw, ['yes', '1', 'true']) ? 1 : 0;
 
             $mappedData = [
-                'business_name'            => $get(['business_name', 'business name', 'company', 'company_name']),
+                'business_name'            => $businessName,
                 'contact_name'             => trim("{$firstName} {$lastName}") ?: null,
                 'first_name'               => $firstName ?: null,
                 'last_name'                => $lastName  ?: null,
@@ -488,10 +502,11 @@ class LeadController extends Controller
                 'plan'                     => $get(['plan']) ?? $get(['package', 'plan_name']),
                 'package_total'            => is_numeric($t = $get(['package_total', 'package total', 'total'])) ? (float)$t : null,
                 'discount'                 => is_numeric($d = $get(['discount', 'disc']))                          ? (float)$d : null,
+                'note'                     => $get(['note', 'notes', 'product_note']),
                 'amount'                   => is_numeric($a = $get(['package_total', 'package total', 'amount', 'total'])) ? (float)$a : 0,
                 'status'                   => $get(['status']),
                 'channel'                  => $get(['channel', 'sale_channel']),
-                'meeting_note'             => $get(['meeting_note', 'meeting note', 'notes', 'note']),
+                'meeting_note'             => $get(['meeting_note', 'meeting note', 'meeting_notes']),
                 'next_step'                => $get(['next_step', 'next step', 'action']),
                 'installation_appointment' => $parseDate($get(['installation_appointment', 'installation appointment']), true),
                 'est_contract_date'        => $parseDate($get(['est_contract_date', 'est. contract date', 'est contract date', 'contract_date'])),
@@ -502,6 +517,37 @@ class LeadController extends Controller
 
             $mappedData = array_filter($mappedData, fn($v) => $v !== null && $v !== '');
             $mappedData['is_referral'] = $isReferral; // always set
+
+            // Auto-save dropdown options to tenant_field_options if they don't exist
+            $dropdownFields = [
+                'biz_type'  => $mappedData['biz_type'] ?? null,
+                'source'    => $mappedData['source'] ?? null,
+                'division'  => $mappedData['division'] ?? null,
+                'township'  => $mappedData['township'] ?? null,
+                'product'   => $mappedData['product'] ?? null,
+                'channel'   => $mappedData['channel'] ?? null,
+                'package'   => $mappedData['package'] ?? null,
+                'status'    => $mappedData['status'] ?? null,
+            ];
+
+            foreach ($dropdownFields as $fieldName => $optionValue) {
+                if ($optionValue && trim($optionValue) !== '') {
+                    // Check if this option already exists
+                    $exists = TenantFieldOption::where('tenant_id', $tenantId)
+                        ->where('field_name', $fieldName)
+                        ->where('option_value', trim($optionValue))
+                        ->exists();
+                    
+                    // If not exists, create it
+                    if (!$exists) {
+                        TenantFieldOption::create([
+                            'tenant_id'    => $tenantId,
+                            'field_name'   => $fieldName,
+                            'option_value' => trim($optionValue),
+                        ]);
+                    }
+                }
+            }
 
             if (empty($mappedData['business_name'])) {
                 $errors++;
@@ -514,9 +560,11 @@ class LeadController extends Controller
 
             try {
                 if ($existing && $updateExisting) {
+                    // Update existing lead
                     $existing->update($mappedData);
                     $updated++;
                 } else {
+                    // Create new lead
                     $mappedData['created_by'] = auth()->id();
                     Lead::create($mappedData);
                     $created++;
@@ -549,7 +597,6 @@ class LeadController extends Controller
 
         if ($created > 0 || $updated > 0) {
             $msg = "Created: {$created}, Updated: {$updated}.";
-            if ($duplicateSkip > 0) $msg .= " Skipped (duplicate): {$duplicateSkip}.";
             if ($nullSkip  > 0)     $msg .= " Skipped (blank rows): {$nullSkip}.";
             if ($errors    > 0)     $msg .= " Errors: {$errors}.";
             return $base->with('success', $msg);
@@ -557,12 +604,6 @@ class LeadController extends Controller
 
         if ($errors > 0) {
             return $base->with('error', "Import failed — {$errors} row(s) could not be saved.");
-        }
-
-        if ($duplicateSkip > 0) {
-            return $base->with('error',
-                "No new leads created — {$duplicateSkip} row(s) skipped (phone already exists). " .
-                "Tick 'Update existing' to overwrite them.");
         }
 
         if ($nullSkip > 0) {

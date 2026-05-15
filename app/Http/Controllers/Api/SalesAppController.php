@@ -89,9 +89,8 @@ class SalesAppController extends Controller
         $dailyFollowUp = (clone $baseQuery)->whereDate('est_follow_up_date', $today)->get();
 
         $weeklyFollowUp = (clone $baseQuery)->whereBetween('est_follow_up_date', [$startOfWeek, $endOfWeek])->get();
-        // 3. Daily Appointment Data
+       
         $dailyAppointment = (clone $baseQuery)->whereDate('installation_appointment_date', $today)->get();
-        // 4. Weekly Appointment Data
         $weeklyAppointment = (clone $baseQuery)->whereBetween('installation_appointment_date', [$startOfWeek, $endOfWeek])->get();
 
         return response()->json([
@@ -105,9 +104,7 @@ class SalesAppController extends Controller
                 'weekly_follow_up_data' => $mapLeads($weeklyFollowUp),
                 'daily_appointment_data' => $mapLeads($dailyAppointment),
                 'weekly_appointment_data' => $mapLeads($weeklyAppointment),
-                'lead_assingend_data' => [] // Safely pass empty array as requested instead of risking crashes on unknown 'lead_assign_column' logic
-            ]
-        ], 200, [], JSON_UNESCAPED_SLASHES);
+                'lead_assingend_data' => [] 
     }
 
 
@@ -118,15 +115,11 @@ class SalesAppController extends Controller
 
         $query = Lead::orderBy('id', 'desc');
 
-        // Apply UID filter if provided
         if (!empty($uidParam)) {
             $query->where('created_by', $uidParam);
         }
 
-        // Status filter heavily restricted/removed as per explicit request
-        // The mobile app will handle filtering if necessary, or the query defaults to all.
-
-        // Additional Query Filters requested by Mobile App
+        
         if ($request->filled('est_contract_date')) {
             $query->whereDate('est_contract_date', $request->input('est_contract_date'));
         }
@@ -141,10 +134,8 @@ class SalesAppController extends Controller
 
         $leads = $query->get();
 
-        // Strictly map the raw Database properties into the Mobile App's required custom Dictionary format
         $mappedDetails = $leads->map(function ($lead) {
 
-            // Ensure status strings exactly match the Sales DDL Value properties even for legacy db entries
             $statusName = $lead->status;
             if ($statusName === 'New' || $statusName === 'New Lead') {
                 $statusName = 'New Lead Potential';
@@ -159,14 +150,13 @@ class SalesAppController extends Controller
                 'follow_up_date' => $lead->est_follow_up_date,
                 'contactno' => $lead->phone,
                 'package' => $lead->package,
-                'plan' => $lead->amount, // Note: In their provided example, plan held '15000' amount
+                'plan' => $lead->amount, 
                 'lead_assign' => null,
                 'created_by' => (string) $lead->created_by,
                 'est_contract_date' => $lead->est_contract_date,
             ];
         });
 
-        // Exact Outer Envelope Structure
         return response()->json([
             'status' => 'Success',
             'response_code' => '000',
@@ -185,18 +175,14 @@ class SalesAppController extends Controller
             $options = [];
             if (isset($fields[$keyName])) {
                 foreach ($fields[$keyName] as $field) {
-                    // Mobile app specifies they might map key to string for packages.
-                    // If they want string for key, they can save it in option_value, 
-                    // but we will safely attach the extra dynamically created columns here!
+                    
                     $item = [
                         'key' => ($keyName === 'package' && !is_numeric($field->id)) ? $field->option_value : $field->id,
                         'value' => $field->option_value
                     ];
 
-                    // Attach extra db columns seamlessly if requested
                     if ($keyName === 'package') {
                         $item['plan'] = $field->plan ?? null;
-                        // For cost/value overrides based on their snippet example
                         if (!empty($field->weight)) {
                             $item['value'] = $field->weight;
                             $item['key'] = $field->option_value;
@@ -204,9 +190,9 @@ class SalesAppController extends Controller
                     }
 
                     if ($keyName === 'status') {
-                        $item['weight'] = $field->weight ?? "10%"; // Fallback mimicking their strict snippet
+                        $item['weight'] = $field->weight ?? "10%"; 
                         if ($field->id == 8001)
-                            $item['key'] = 8001; // Force 8001 mappings just like before
+                            $item['key'] = 8001; 
                     }
 
                     $options[] = $item;
@@ -219,7 +205,6 @@ class SalesAppController extends Controller
             'status' => 'Success',
             'response_code' => '000',
             'description' => 'Success',
-            // Retrieve strictly from dynamic Option tables
             'sale_status' => $formatOptions('status'),
             'sale_source' => $formatOptions('source'),
             'sale_business_type' => $formatOptions('biz_type'),
@@ -244,7 +229,6 @@ class SalesAppController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Lead not found.'], 404);
         }
 
-        // Mock status mapping to fulfill Mobile App's expectation
         $statusKey = '8001';
         if ($lead->status === 'New')
             $statusKey = '8001';
@@ -354,7 +338,6 @@ class SalesAppController extends Controller
             'discount' => $request->input('discount'),
             'meeting_note' => $request->input('meeting_notes'),
             'next_step' => $request->input('next_step'),
-            // "lat", "long", "customer_type", "isNotified" ignored to prevent column crashes
         ];
 
         $data = array_filter($data, fn($v) => !is_null($v));
@@ -392,7 +375,6 @@ class SalesAppController extends Controller
     {
         $uidParam = $request->input('uid');
 
-        // Query contracted leads
         $query = Lead::whereNotNull('est_contract_date')->orderBy('id', 'desc');
 
         if (!empty($uidParam)) {
@@ -431,7 +413,6 @@ class SalesAppController extends Controller
 
     public function getContractedDetail(Request $request)
     {
-        // Enforce the new requirement to lookup by profile_id instead of lid
         $profileId = $request->input('profile_id', $request->input('lid', $request->input('leadId')));
         $lead = Lead::where('id', $profileId)->orWhere('uuid', $profileId)->first();
 
@@ -439,7 +420,6 @@ class SalesAppController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Contracted lead not found.'], 404);
         }
 
-        // Mock status mapping to fulfill Mobile App's expectation
         $statusKey = '8001';
         if ($lead->status === 'New')
             $statusKey = '8001';
@@ -495,7 +475,6 @@ class SalesAppController extends Controller
 
         $lead = Lead::where('id', $profileId)->orWhere('uuid', $profileId)->first();
 
-        // Exact mapping from the mobile app's JSON newly standardized requirement
         $data = [
             'first_name' => $request->input('name'),
             'contact_name' => $request->input('name', $lead->contact_name ?? null),
@@ -512,7 +491,6 @@ class SalesAppController extends Controller
             'contracted_date' => $request->input('contracted_date'),
             'installation_appointment_date' => $request->input('installation_appointment_date'),
             'customer_note' => $request->input('customer_note'),
-            // "lat", "long", and "customer_type" are ignored currently to prevent SQL ColumnNotFound crashes.
         ];
 
         $data = array_filter($data, fn($v) => !is_null($v));

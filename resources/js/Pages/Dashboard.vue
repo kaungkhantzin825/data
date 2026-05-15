@@ -79,6 +79,7 @@
                             @apply="applyFilters"
                             @reset="resetFilters"
                             @edit="editLead"
+                            @view="viewLead"
                             @page="goPage"
                         />
 
@@ -276,6 +277,10 @@ const editLead = (lead) => {
     goToTab('create');
 };
 
+const viewLead = (lead) => {
+    router.get(`/leads/${lead.id}`, {}, { preserveState: false });
+};
+
 const resetLeadForm = () => { 
     editingLeadId.value = null;
     leadForm.reset(); 
@@ -341,16 +346,16 @@ const hUpload = ({ file, updateExisting }) => {
                         html += `<br><br><span style="color:#ef4444"><b>${r.errors} row(s) failed:</b></span><br>`;
                         html += r.error_details.map(e => `<small>• ${e}</small>`).join('<br>');
                     }
-                    Swal.fire({ title: '✅ Import Complete', html, icon: 'success' });
+                    Swal.fire({ title: 'Import Complete', html, icon: 'success' });
 
                 } else if (r.errors > 0) {
                     let html = `<b>${r.errors} row(s) could not be saved:</b><br><br>`;
                     html += r.error_details.map(e => `<small style="color:#ef4444">• ${e}</small>`).join('<br>');
-                    Swal.fire({ title: '❌ Import Failed', html, icon: 'error' });
+                    Swal.fire({ title: 'Import Failed', html, icon: 'error' });
 
                 } else if (r.duplicate_skip > 0 && !r.null_skip) {
-                    Swal.fire('⚠️ No New Leads',
-                        `${r.duplicate_skip} row(s) already exist. Tick "Update existing" to overwrite them.`,
+                    Swal.fire('No New Leads',
+                        `${r.duplicate_skip} row(s) already exist. Check "Update existing" to update them.`,
                         'warning');
 
                 } else if (r.null_skip > 0) {
@@ -360,22 +365,22 @@ const hUpload = ({ file, updateExisting }) => {
                     html += `<small style="color:#374151"><b>${hdrs}</b></small><br><br>`;
                     html += `<small style="color:#ef4444">Required column names: <b>phone</b>, <b>first_name</b> (or <b>last_name</b>)</small><br>`;
                     html += `<small style="color:#6b7280">Make sure your file uses the <b>Sample CSV</b> headers exactly.</small>`;
-                    Swal.fire({ title: '❌ Column Name Mismatch', html, icon: 'error' });
+                    Swal.fire({ title: 'Column Name Mismatch', html, icon: 'error' });
 
                 } else {
-                    Swal.fire('⚠️ Nothing Imported', err || 'Please check your CSV file and column names.', 'warning');
+                    Swal.fire('Nothing Imported', err || 'Please check your CSV file and column names.', 'warning');
                 }
             } else if (err) {
-                Swal.fire('❌ Import Failed', err, 'error');
+                Swal.fire('Import Failed', err, 'error');
             } else {
-                Swal.fire('✅ Success', ok || 'Import complete!', 'success');
+                Swal.fire('Success', ok || 'Import complete!', 'success');
             }
         },
 
         onError: (err) => {
             console.error(err);
             const firstError = Object.values(err)[0] || 'Please check your CSV file.';
-            Swal.fire('❌ Upload Error', firstError, 'error');
+            Swal.fire('Upload Error', firstError, 'error');
         }
     });
 };
