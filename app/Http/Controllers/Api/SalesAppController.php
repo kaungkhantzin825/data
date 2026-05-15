@@ -104,9 +104,10 @@ class SalesAppController extends Controller
                 'weekly_follow_up_data' => $mapLeads($weeklyFollowUp),
                 'daily_appointment_data' => $mapLeads($dailyAppointment),
                 'weekly_appointment_data' => $mapLeads($weeklyAppointment),
-                'lead_assingend_data' => [] 
+                'lead_assingend_data' => []
+            ]
+        ]);
     }
-
 
     public function getLeadList(Request $request)
     {

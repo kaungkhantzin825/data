@@ -6,9 +6,9 @@
                 <p class="card-sub">Upload Excel or CSV files to add leads</p>
             </div>
             <div class="card-actions">
-                <button class="btn-outline-green" @click="$emit('download')">
+                <a href="/sample_leads.csv" download class="btn-outline-green" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
                     <v-icon icon="mdi-download" size="15" /> Download CSV
-                </button>
+                </a>
                 <button class="btn-solid-green" @click="$emit('create')">
                     Add New
                 </button>

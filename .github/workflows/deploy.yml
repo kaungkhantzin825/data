@@ -1,0 +1,95 @@
+name: Deploy Laravel Pipeline Business
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-pipeline-business-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  SSH_PORT: ${{ secrets.SSH_PORT }}
+
+jobs:
+  deploy:
+    name: Deploy to pipeline.business
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install sshpass + rsync
+        run: sudo apt-get update && sudo apt-get install -y sshpass rsync
+
+      - name: Sync project to server
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          TARGET_DIR="/var/www/html/sale-pipe-line-cms"
+          PORT="${SSH_PORT:-22}"
+
+          sshpass -p "$SSH_PASSWORD" rsync -az --delete \
+            --exclude=".git" \
+            --exclude="node_modules" \
+            --exclude="vendor" \
+            --exclude=".env" \
+            -e "ssh -p $PORT -o StrictHostKeyChecking=no" \
+            ./ "$SSH_USER@$SSH_HOST:$TARGET_DIR/"
+
+      - name: Deploy app via SSH
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          PORT="${SSH_PORT:-22}"
+
+          sshpass -p "$SSH_PASSWORD" ssh -p "$PORT" -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" bash <<'SSH'
+            set -euo pipefail
+
+            TARGET_DIR="/var/www/html/sale-pipe-line-cms"
+
+            cd "$TARGET_DIR"
+
+            test -f .env || { echo ".env missing"; exit 1; }
+
+            mkdir -p bootstrap/cache \
+                     storage/framework/cache \
+                     storage/framework/sessions \
+                     storage/framework/views \
+                     storage/logs
+
+            chown -R www-data:www-data bootstrap/cache storage || true
+            chmod -R 775 bootstrap/cache storage || true
+
+            php artisan down --render="errors::maintenance" || true
+
+            composer install \
+              --no-interaction \
+              --no-dev \
+              --prefer-dist \
+              --optimize-autoloader \
+              --no-progress
+
+            npm ci --no-audit --no-fund
+            npm run build
+
+            php artisan route:clear || true
+            php artisan config:clear || true
+            php artisan cache:clear || true
+            php artisan view:clear || true
+
+            php artisan migrate --force
+
+            php artisan config:cache
+            php artisan view:cache || true
+
+            php artisan up
+
+            chown -R www-data:www-data bootstrap/cache storage || true
+            chmod -R 775 bootstrap/cache storage || true
+          SSH
