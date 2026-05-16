@@ -243,7 +243,18 @@ class LeadController extends Controller
         ]);
 
         $validated['created_by'] = auth()->id();
-        $validated['contact_name'] = trim(($validated['first_name'] ?? '') . ' ' . ($validated['last_name'] ?? ''));
+        
+        // Build contact_name from first_name and last_name (only if they have values)
+        $firstName = $validated['first_name'] ?? '';
+        $lastName = $validated['last_name'] ?? '';
+        $contactName = trim($firstName . ' ' . $lastName);
+        $validated['contact_name'] = $contactName ?: '-';
+        
+        // Set default "-" for empty business_name
+        if (empty($validated['business_name']) || trim($validated['business_name']) === '') {
+            $validated['business_name'] = '-';
+        }
+        
         $validated['plan'] = $validated['package'] ?? null;
         $validated['amount'] = $validated['package_total'] ?? 0;
 
@@ -302,7 +313,17 @@ class LeadController extends Controller
             'next_step' => 'nullable|string',
         ]);
 
-        $validated['contact_name'] = trim(($validated['first_name'] ?? '') . ' ' . ($validated['last_name'] ?? ''));
+        // Build contact_name from first_name and last_name (only if they have values)
+        $firstName = $validated['first_name'] ?? '';
+        $lastName = $validated['last_name'] ?? '';
+        $contactName = trim($firstName . ' ' . $lastName);
+        $validated['contact_name'] = $contactName ?: '-';
+        
+        // Set default "-" for empty business_name
+        if (empty($validated['business_name']) || trim($validated['business_name']) === '') {
+            $validated['business_name'] = '-';
+        }
+        
         $validated['plan'] = $validated['package'] ?? null;
         $validated['amount'] = $validated['package_total'] ?? 0;
 
@@ -335,9 +356,11 @@ class LeadController extends Controller
 
         $leads = $query->orderByDesc('id')->get();
 
+        $filename = 'Pipeline' . date('dmY') . '.csv';
+        
         $httpHeaders = [
             'Content-type'        => 'text/csv',
-            'Content-Disposition' => 'attachment; filename=leads_export_' . date('Y-m-d_H-i-s') . '.csv',
+            'Content-Disposition' => 'attachment; filename=' . $filename,
             'Pragma'              => 'no-cache',
             'Cache-Control'       => 'must-revalidate, post-check=0, pre-check=0',
             'Expires'             => '0',
@@ -359,7 +382,6 @@ class LeadController extends Controller
             fputcsv($file, $csvColumns);
 
             foreach ($leads as $lead) {
-                // Split contact_name into first_name and last_name
                 $nameParts = explode(' ', $lead->contact_name ?? '', 2);
                 fputcsv($file, [
                     $lead->business_name,
@@ -398,17 +420,26 @@ class LeadController extends Controller
     public function import(Request $request)
     {
         $request->validate([
-            'file'            => 'required|file',
+            'file'            => 'required|file|mimes:csv,txt,xlsx,xls|max:2048',
             'update_existing' => 'nullable|string',
         ]);
 
         $updateExisting = $request->update_existing === 'true';
 
-        $file   = $request->file('file');
-        $handle = fopen($file->getRealPath(), 'r');
+        $file = $request->file('file');
+        
+        
+        $originalName = $file->getClientOriginalName();
+        $fileName = date('Y-m-d_H-i-s') . '_' . $originalName;
+        $filePath = $file->storeAs('uploads/leads', $fileName, 'public');
+        
+      
+        $storedFilePath = storage_path('app/public/' . $filePath);
+        $handle = fopen($storedFilePath, 'r');
 
         $rawHeaders = fgetcsv($handle, 5000, ',');
         if (!$rawHeaders) {
+            fclose($handle);
             return redirect()->back()->withErrors(['file' => 'Invalid CSV format.']);
         }
         $rawHeaders[0] = ltrim($rawHeaders[0], "\xEF\xBB\xBF\xFF\xFE");
@@ -421,7 +452,6 @@ class LeadController extends Controller
         $errors         = 0;
         $errorDetails   = [];
 
-        // Get tenant ID for saving dropdown options
         $user = auth()->user();
         $tenantId = $user->tenant_id ? Tenant::find($user->tenant_id)->user_id : $user->id;
 
@@ -467,17 +497,14 @@ class LeadController extends Controller
                 continue;
             }
 
-            // Check for duplicate by phone number only (only when update mode is enabled)
             $existing = null;
             $businessName = $get(['business_name', 'business name', 'company', 'company_name']);
             
             if ($phone && $updateExisting) {
-                // Only check for duplicates when update mode is enabled
                 $existing = Lead::where('phone', $phone)->first();
             }
 
             if ($existing && $updateExisting) {
-                // Will update this existing lead (handled later)
             }
 
             $refRaw     = strtolower($get(['is_referral', 'referral', 'ref']) ?? 'no');
@@ -516,9 +543,8 @@ class LeadController extends Controller
             ];
 
             $mappedData = array_filter($mappedData, fn($v) => $v !== null && $v !== '');
-            $mappedData['is_referral'] = $isReferral; // always set
+            $mappedData['is_referral'] = $isReferral; 
 
-            // Auto-save dropdown options to tenant_field_options if they don't exist
             $dropdownFields = [
                 'biz_type'  => $mappedData['biz_type'] ?? null,
                 'source'    => $mappedData['source'] ?? null,
@@ -532,13 +558,11 @@ class LeadController extends Controller
 
             foreach ($dropdownFields as $fieldName => $optionValue) {
                 if ($optionValue && trim($optionValue) !== '') {
-                    // Check if this option already exists
                     $exists = TenantFieldOption::where('tenant_id', $tenantId)
                         ->where('field_name', $fieldName)
                         ->where('option_value', trim($optionValue))
                         ->exists();
                     
-                    // If not exists, create it
                     if (!$exists) {
                         TenantFieldOption::create([
                             'tenant_id'    => $tenantId,
@@ -560,11 +584,9 @@ class LeadController extends Controller
 
             try {
                 if ($existing && $updateExisting) {
-                    // Update existing lead
                     $existing->update($mappedData);
                     $updated++;
                 } else {
-                    // Create new lead
                     $mappedData['created_by'] = auth()->id();
                     Lead::create($mappedData);
                     $created++;

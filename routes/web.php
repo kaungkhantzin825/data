@@ -53,10 +53,10 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/leads', [LeadController::class, 'index'])->name('leads.index');
     Route::get('/leads/create', [LeadController::class, 'create'])->name('leads.create');
     Route::get('/leads/upload', [LeadController::class, 'upload'])->name('leads.upload');
+    Route::get('/leads/export', [LeadController::class, 'export'])->name('leads.export');
     Route::get('/leads/{lead}', [LeadController::class, 'show'])->name('leads.show');
     
     Route::post('/leads/import', [LeadController::class, 'import'])->name('leads.import');
-    Route::get('/leads/export', [LeadController::class, 'export'])->name('leads.export');
     
     Route::post('/leads', [LeadController::class, 'store'])->name('leads.store');
     Route::put('/leads/{lead}', [LeadController::class, 'update'])->name('leads.update');

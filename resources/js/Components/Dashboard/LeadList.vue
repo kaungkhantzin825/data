@@ -10,10 +10,10 @@
                     <v-icon icon="mdi-upload" size="15" />
                     Upload Lead
                 </button>
-                <a href="/sample_leads.csv" download class="btn-outline-green" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+                <button class="btn-outline-green" @click="$emit('download')">
                     <v-icon icon="mdi-download" size="15" />
                     Download CSV
-                </a>
+                </button>
             </div>
         </div>
 
@@ -93,31 +93,31 @@
                 <tbody>
                     <tr v-for="(lead, i) in leads.data" :key="lead.id" :class="{stripe: i % 2 === 1}">
                         <td>{{ (leads.from ?? 0) + i }}</td>
-                        <td>{{ lead.business_name }}</td>
-                        <td>{{ lead.first_name }}</td>
-                        <td>{{ lead.last_name }}</td>
-                        <td>{{ lead.contact_email }}</td>
-                        <td>{{ lead.phone }}</td>
-                        <td>{{ lead.secondary_contact_number }}</td>
-                        <td>{{ lead.biz_type }}</td>
-                        <td>{{ lead.source }}</td>
-                        <td>{{ lead.division }}</td>
-                        <td>{{ lead.township }}</td>
-                        <td>{{ lead.address }}</td>
-                        <td>{{ lead.product }}</td>
-                        <td>{{ lead.package }}</td>
-                        <td>{{ lead.package_total ? Number(lead.package_total).toLocaleString() : '' }}</td>
-                        <td>{{ lead.discount ? Number(lead.discount).toLocaleString() : '' }}</td>
-                        <td>{{ lead.note }}</td>
-                        <td>{{ lead.status }}</td>
-                        <td>{{ lead.channel }}</td>
-                        <td>{{ lead.installation_appointment }}</td>
-                        <td>{{ lead.est_contract_date }}</td>
-                        <td>{{ lead.est_start_date }}</td>
-                        <td>{{ lead.est_follow_up_date }}</td>
+                        <td :style="!lead.business_name || lead.business_name === '-' ? 'color: white;' : ''">{{ lead.business_name || '-' }}</td>
+                        <td :style="!lead.first_name || lead.first_name === '-' ? 'color: white;' : ''">{{ lead.first_name || '-' }}</td>
+                        <td :style="!lead.last_name || lead.last_name === '-' ? 'color: white;' : ''">{{ lead.last_name || '-' }}</td>
+                        <td :style="!lead.contact_email || lead.contact_email === '-' ? 'color: white;' : ''">{{ lead.contact_email || '-' }}</td>
+                        <td :style="!lead.phone || lead.phone === '-' ? 'color: white;' : ''">{{ lead.phone || '-' }}</td>
+                        <td :style="!lead.secondary_contact_number || lead.secondary_contact_number === '-' ? 'color: white;' : ''">{{ lead.secondary_contact_number || '-' }}</td>
+                        <td :style="!lead.biz_type || lead.biz_type === '-' ? 'color: white;' : ''">{{ lead.biz_type || '-' }}</td>
+                        <td :style="!lead.source || lead.source === '-' ? 'color: white;' : ''">{{ lead.source || '-' }}</td>
+                        <td :style="!lead.division || lead.division === '-' ? 'color: white;' : ''">{{ lead.division || '-' }}</td>
+                        <td :style="!lead.township || lead.township === '-' ? 'color: white;' : ''">{{ lead.township || '-' }}</td>
+                        <td :style="!lead.address || lead.address === '-' ? 'color: white;' : ''">{{ lead.address || '-' }}</td>
+                        <td :style="!lead.product || lead.product === '-' ? 'color: white;' : ''">{{ lead.product || '-' }}</td>
+                        <td :style="!lead.package || lead.package === '-' ? 'color: white;' : ''">{{ lead.package || '-' }}</td>
+                        <td :style="!lead.package_total ? 'color: white;' : ''">{{ lead.package_total ? Number(lead.package_total).toLocaleString() : '-' }}</td>
+                        <td :style="!lead.discount ? 'color: white;' : ''">{{ lead.discount ? Number(lead.discount).toLocaleString() : '-' }}</td>
+                        <td :style="!lead.note || lead.note === '-' ? 'color: white;' : ''">{{ lead.note || '-' }}</td>
+                        <td :style="!lead.status || lead.status === '-' ? 'color: white;' : ''">{{ lead.status || '-' }}</td>
+                        <td :style="!lead.channel || lead.channel === '-' ? 'color: white;' : ''">{{ lead.channel || '-' }}</td>
+                        <td :style="!lead.installation_appointment || lead.installation_appointment === '-' ? 'color: white;' : ''">{{ lead.installation_appointment || '-' }}</td>
+                        <td :style="!lead.est_contract_date || lead.est_contract_date === '-' ? 'color: white;' : ''">{{ lead.est_contract_date || '-' }}</td>
+                        <td :style="!lead.est_start_date || lead.est_start_date === '-' ? 'color: white;' : ''">{{ lead.est_start_date || '-' }}</td>
+                        <td :style="!lead.est_follow_up_date || lead.est_follow_up_date === '-' ? 'color: white;' : ''">{{ lead.est_follow_up_date || '-' }}</td>
                         <td>{{ lead.is_referral ? 'Yes' : 'No' }}</td>
-                        <td>{{ lead.meeting_note }}</td>
-                        <td>{{ lead.next_step }}</td>
+                        <td :style="!lead.meeting_note || lead.meeting_note === '-' ? 'color: white;' : ''">{{ lead.meeting_note || '-' }}</td>
+                        <td :style="!lead.next_step || lead.next_step === '-' ? 'color: white;' : ''">{{ lead.next_step || '-' }}</td>
                         <td>
                             <div style="display: flex; gap: 8px;">
                                 <button class="btn-edit" @click="$emit('view', lead)" style="background: #3b82f6;">

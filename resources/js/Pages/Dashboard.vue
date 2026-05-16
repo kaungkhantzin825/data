@@ -222,7 +222,7 @@ const leadForm = useForm({
     business_name: '', first_name: '', last_name: '', contact_email: '', phone: '', secondary_contact_number: '',
     biz_type: '', source: '', division: '', township: '', address: '',
     product: '', package: '', package_total: null, discount: null, note: '',
-    status: '', channel: '', installation_appointment: '', est_contract_date: '', est_start_date: '',
+    status: 'active', channel: '', installation_appointment: '', est_contract_date: '', est_start_date: '',
     est_follow_up_date: '', is_referral: false, meeting_note: '', next_step: ''
 });
 
