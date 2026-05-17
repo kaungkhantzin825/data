@@ -21,7 +21,14 @@ class LeadController extends Controller
 
         
         if ($request->has('user_id') && $request->user_id !== '') {
-            $query->where('created_by', $request->user_id);
+            $selectedUser = \App\Models\User::find($request->user_id);
+            if ($selectedUser && $selectedUser->hasRole('Company Admin')) {
+                $staffIds = \App\Models\User::where('created_by', $selectedUser->id)->pluck('id')->toArray();
+                $allIds = array_merge([$selectedUser->id], $staffIds);
+                $query->whereIn('created_by', $allIds);
+            } else {
+                $query->where('created_by', $request->user_id);
+            }
         }
 
         $allLeads = $query->get();
@@ -193,7 +200,14 @@ class LeadController extends Controller
         }
 
         if ($request->created_by) {
-            $query->where('created_by', $request->created_by);
+            $selectedUser = \App\Models\User::find($request->created_by);
+            if ($selectedUser && $selectedUser->hasRole('Company Admin')) {
+                $staffIds = \App\Models\User::where('created_by', $selectedUser->id)->pluck('id')->toArray();
+                $allIds = array_merge([$selectedUser->id], $staffIds);
+                $query->whereIn('created_by', $allIds);
+            } else {
+                $query->where('created_by', $request->created_by);
+            }
         }
 
         \Log::info('Lead Query:', ['sql' => $query->toSql(), 'bindings' => $query->getBindings(), 'user' => auth()->id()]);
