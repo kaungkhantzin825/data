@@ -15,9 +15,7 @@ class LeadController extends Controller
         $query = Lead::query()->with('creator:id,name');
         
         $user = auth()->user();
-        if ($user->hasRole('Company Admin')) {
-            $query->where('created_by', $user->id);
-        } else if ($user->hasRole('Staff')) {
+        if ($user->hasRole('Staff')) {
             $query->where('created_by', $user->id);
         }
 
@@ -170,9 +168,7 @@ class LeadController extends Controller
         $query = Lead::query();
         
         $user = auth()->user();
-        if ($user->hasRole('Company Admin')) {
-            $query->where('created_by', $user->id);
-        } else if ($user->hasRole('Staff')) {
+        if ($user->hasRole('Staff')) {
             $query->where('created_by', $user->id);
         }
         
