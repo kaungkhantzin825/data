@@ -102,6 +102,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     
     Route::get('/settings', [\App\Http\Controllers\ProfileController::class, 'index'])->name('settings.index');
     Route::post('/settings', [\App\Http\Controllers\ProfileController::class, 'update'])->name('settings.update');
+    Route::post('/settings/tenant-data', [\App\Http\Controllers\ProfileController::class, 'updateTenantData'])->name('settings.tenantData');
     Route::post('/settings/backup', [\App\Http\Controllers\ProfileController::class, 'createBackup'])->name('settings.backup.create');
     Route::get('/settings/backup/{id}/download', [\App\Http\Controllers\ProfileController::class, 'downloadBackup'])->name('settings.backup.download');
     Route::delete('/settings/backup/{id}', [\App\Http\Controllers\ProfileController::class, 'deleteBackup'])->name('settings.backup.delete');

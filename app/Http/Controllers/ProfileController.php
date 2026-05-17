@@ -120,6 +120,43 @@ class ProfileController extends Controller
         return redirect()->back()->with('success', 'Settings updated successfully.');
     }
 
+    public function updateTenantData(Request $request)
+    {
+        $user = auth()->user();
+
+        // Only allow Company Super Admins
+        if (!$user->hasRole('Company Super Admin')) {
+            abort(403, 'Unauthorized. Only Company Super Admins can update tenant settings.');
+        }
+
+        // Validate form fields config
+        $validated = $request->validate([
+            'form_fields' => 'required|array',
+            'form_fields.*.label' => 'required|string|max:100',
+            'form_fields.*.is_visible' => 'required|boolean',
+        ]);
+
+        $tenant = $user->tenant;
+        if (!$tenant) {
+            return redirect()->back()->with('error', 'No active tenant found.');
+        }
+
+        // Get existing data or initialize array
+        $data = $tenant->data ?? [];
+        
+        // Merge form fields
+        $data['form_fields'] = array_merge(
+            $data['form_fields'] ?? [], 
+            $validated['form_fields']
+        );
+
+        // Save
+        $tenant->data = $data;
+        $tenant->save();
+
+        return redirect()->back()->with('success', 'Field labels updated successfully.');
+    }
+
     private function generateSqlDump($filePath)
     {
         $tables = \Illuminate\Support\Facades\DB::select('SHOW TABLES');

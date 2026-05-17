@@ -84,9 +84,6 @@ class AuthController extends Controller
             'is_active' => false,
         ]);
 
-        $role = \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'User', 'guard_name' => 'web']);
-        $user->assignRole($role);
-
         return redirect()->route('login')->withErrors([
             'email' => 'Registration complete! Your account is pending admin approval.'
         ]);

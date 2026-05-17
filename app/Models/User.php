@@ -37,6 +37,7 @@ class User extends Authenticatable
         'plan_expired_at',
         'is_active',
         'password',
+        'created_by',
     ];
 
     /**
@@ -73,5 +74,16 @@ class User extends Authenticatable
     public function staff()
     {
         return $this->hasMany(User::class, 'tenant_id', 'id')->where('id', '!=', $this->id);
+    }
+
+    public function allRoles()
+    {
+        return $this->morphToMany(
+            \Spatie\Permission\Models\Role::class,
+            'model',
+            config('permission.table_names.model_has_roles'),
+            config('permission.column_names.model_morph_key'),
+            'role_id'
+        );
     }
 }

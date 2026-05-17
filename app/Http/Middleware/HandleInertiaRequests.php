@@ -41,11 +41,13 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user() ? [
                     'id'          => $request->user()->id,
                     'name'        => $request->user()->name,
+                    'company_name'=> $request->user()->company_name,
                     'email'       => $request->user()->email,
-                    'role'        => $request->user()->role ?? 'user',
+                    'role'        => $request->user()->roles->first()->name ?? $request->user()->role ?? 'user',
                     'is_admin'    => $request->user()->is_admin ?? false,
                     'profile_logo'=> $request->user()->profile_logo ? asset('storage/' . $request->user()->profile_logo) : null,
                     'permissions' => $request->user()->getAllPermissions()->pluck('name'),
+                    'tenant_settings' => $request->user()->tenant ? $request->user()->tenant->data : null,
                 ] : null,
             ],
             'flash' => [

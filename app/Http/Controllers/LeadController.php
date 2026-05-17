@@ -13,6 +13,19 @@ class LeadController extends Controller
     public function dashboard(Request $request)
     {
         $query = Lead::query()->with('creator:id,name');
+        
+        $user = auth()->user();
+        if ($user->hasRole('Company Admin')) {
+            $query->where('created_by', $user->id);
+        } else if ($user->hasRole('Staff')) {
+            $query->where('created_by', $user->id);
+        }
+
+        
+        if ($request->has('user_id') && $request->user_id !== '') {
+            $query->where('created_by', $request->user_id);
+        }
+
         $allLeads = $query->get();
         $now = \Carbon\Carbon::now();
 
@@ -120,6 +133,22 @@ class LeadController extends Controller
         $allLeadsReport = $buildMetrics($allLeads);
         $monthlyOverview = $buildMetrics($monthLeads);
 
+        $tenantId = auth()->user()->is_admin ? null : (auth()->user()->tenant_id ?: auth()->id());
+        
+        $userQuery = \App\Models\User::with('roles');
+        if ($tenantId) {
+            $userQuery->where('tenant_id', $tenantId);
+        }
+        
+        $availableUsers = $userQuery->get()->filter(function($u) {
+            return $u->hasRole('Company Admin');
+        })->map(function($u) {
+            return [
+                'id' => $u->id,
+                'name' => $u->name . ' (Company Admin)',
+            ];
+        })->values();
+
         return Inertia::render('Dashboard', [
             'activeTab'      => 'dashboard',
             'summaryReports' => $summaryReports,
@@ -130,6 +159,8 @@ class LeadController extends Controller
             'expiringPlans'  => $expiringPlans,
             'reqMonth'       => $reqMonth,
             'reqYear'        => $reqYear,
+            'availableUsers' => $availableUsers,
+            'filters'        => ['user_id' => $request->user_id],
             'fieldOptions'   => $this->getTenantFieldOptions(),
         ]);
     }
@@ -137,6 +168,14 @@ class LeadController extends Controller
     public function index(Request $request)
     {
         $query = Lead::query();
+        
+        $user = auth()->user();
+        if ($user->hasRole('Company Admin')) {
+            $query->where('created_by', $user->id);
+        } else if ($user->hasRole('Staff')) {
+            $query->where('created_by', $user->id);
+        }
+        
         if ($request->search) {
             $query->where(function ($q) use ($request) {
                 $q->where('business_name', 'like', "%{$request->search}%")
@@ -157,19 +196,40 @@ class LeadController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->created_by) {
+            $query->where('created_by', $request->created_by);
+        }
+
         \Log::info('Lead Query:', ['sql' => $query->toSql(), 'bindings' => $query->getBindings(), 'user' => auth()->id()]);
 
         $leads = $query->orderByDesc('id')->paginate(10)->withQueryString();
 
         $availablePlans = Lead::whereNotNull('plan')->where('plan', '!=', '')->distinct()->pluck('plan');
         $availableBizTypes = Lead::whereNotNull('biz_type')->where('biz_type', '!=', '')->distinct()->pluck('biz_type');
+        
+        $tenantId = auth()->user()->is_admin ? null : (auth()->user()->tenant_id ?: auth()->id());
+        
+        $userQuery = \App\Models\User::with('roles');
+        if ($tenantId) {
+            $userQuery->where('tenant_id', $tenantId);
+        }
+        
+        $availableUsers = $userQuery->get()->filter(function($u) {
+            return $u->hasRole('Company Admin');
+        })->map(function($u) {
+            return [
+                'id' => $u->id,
+                'name' => $u->name . ' (Company Admin)',
+            ];
+        })->values();
 
         return Inertia::render('Dashboard', [
             'leads' => $leads,
-            'filters' => $request->only(['search', 'plan', 'biz_type', 'status']),
+            'filters' => $request->only(['search', 'plan', 'biz_type', 'status', 'created_by']),
             'activeTab' => 'lists',
             'availablePlans' => $availablePlans,
             'availableBizTypes' => $availableBizTypes,
+            'availableUsers' => $availableUsers,
             'fieldOptions' => $this->getTenantFieldOptions(),
         ]);
     }

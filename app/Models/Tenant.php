@@ -22,5 +22,10 @@ class Tenant extends Model
         'id',
         'user_id',
         'tenancy_db_name',
+        'data',
+    ];
+
+    protected $casts = [
+        'data' => 'array',
     ];
 }

@@ -7,12 +7,21 @@
                          alt="Pipeline" class="nav-logo" />
                 </div>
                 <div class="topbar-right">
-                    <div class="admin-menu" @click="adminOpen = !adminOpen">
-                        <img v-if="auth?.profile_logo" :src="auth.profile_logo" class="profile-avatar-small" alt="Avatar"/>
-                        <span class="admin-name">{{ auth?.name ?? 'admin' }}</span>
+                    <div class="admin-menu" @click="adminOpen = !adminOpen" style="padding: 6px 14px 6px 16px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 30px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s;">
+                        <div style="display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; margin-right: 12px;">
+                            <span style="font-size: 0.88rem; font-weight: 600; color: #111827;">
+                                {{ auth?.name ?? 'Admin' }}
+                                <span v-if="auth?.company_name" style="color: #6b7280; font-weight: 400; font-size: 0.8rem;"> @ {{ auth.company_name }}</span>
+                            </span>
+                            <span v-if="auth?.role" style="font-size: 0.7rem; color: #2ecc5e; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">{{ auth.role }}</span>
+                        </div>
+                        <img v-if="auth?.profile_logo" :src="auth.profile_logo" class="profile-avatar-small" alt="Avatar" style="margin-right: 0; width: 34px; height: 34px; box-shadow: none; border: 2px solid #e5e7eb;"/>
+                        <div v-else style="width: 34px; height: 34px; border-radius: 50%; background: #f3f4f6; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: center; color: #4b5563; font-weight: 600; font-size: 1rem;">
+                            {{ (auth?.name || 'A').charAt(0).toUpperCase() }}
+                        </div>
                         <v-icon :icon="adminOpen ? 'mdi-chevron-up' : 'mdi-chevron-down'"
-                            size="18" color="#374151" />
-                        <div v-if="adminOpen" class="admin-dropdown" @click.stop>
+                            size="18" color="#9ca3af" style="margin-left: 8px;" />
+                        <div v-if="adminOpen" class="admin-dropdown" @click.stop style="top: calc(100% + 8px); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
                             <div class="dd-item" @click="logout">
                                 <v-icon icon="mdi-logout" size="16" />
                                 Logout
@@ -57,9 +66,13 @@
                                 <v-icon icon="mdi-history" size="20" style="margin-right:8px;" />
                                 Activity Log
                             </button>
-                            <button class="sidebar-item" v-if="can('setting_user_status')" :class="{ active: activeSettingTab === 'users' }" @click="activeSettingTab = 'users'">
+                            <button class="sidebar-item" v-if="auth?.role === 'Company Super Admin' || auth?.is_admin" :class="{ active: activeSettingTab === 'users' }" @click="activeSettingTab = 'users'">
                                 <v-icon icon="mdi-account-check-outline" size="20" style="margin-right:8px;" />
                                 User Login Status
+                            </button>
+                            <button class="sidebar-item" v-if="auth?.role === 'Company Super Admin' || auth?.is_admin" :class="{ active: activeSettingTab === 'field_labels' }" @click="activeSettingTab = 'field_labels'">
+                                <v-icon icon="mdi-form-textbox" size="20" style="margin-right:8px;" />
+                                Custom table title
                             </button>
                         </div>
 
@@ -294,6 +307,47 @@
                                 </div>
                             </div>
 
+                            <div class="content-card" v-if="activeSettingTab === 'field_labels'" style="padding: 32px;">
+                                <div class="card-header pb-4 border-b">
+                                    <div>
+                                        <h2 class="card-title">Custom table title</h2>
+                                        <p class="card-sub">Customize the field names for your forms and data tables.</p>
+                                    </div>
+                                </div>
+                                <form @submit.prevent="saveFieldLabels" style="margin-top: 24px;">
+                                    <div class="table-wrap" style="max-height: 500px; overflow-y: auto;">
+                                        <table class="data-table">
+                                            <thead style="position: sticky; top: 0; background: #fff; z-index: 1; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                                                <tr>
+                                                    <th>Default Field Name</th>
+                                                    <th>Custom Label</th>
+                                                    <th style="width: 100px; text-align: center;">Visible</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr v-for="key in Object.keys(defaultFormFields)" :key="key">
+                                                    <td style="text-transform: capitalize;">{{ key.replace(/_/g, ' ') }}</td>
+                                                    <td>
+                                                        <input v-if="tenantForm.form_fields[key]" v-model="tenantForm.form_fields[key].label" type="text" class="form-input" style="max-width: 300px;" />
+                                                    </td>
+                                                    <td style="text-align: center;">
+                                                        <label class="toggle" style="margin: 0 auto;" v-if="tenantForm.form_fields[key]">
+                                                            <input type="checkbox" v-model="tenantForm.form_fields[key].is_visible" />
+                                                            <span class="slider"></span>
+                                                        </label>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div style="display:flex; justify-content:flex-end; margin-top: 24px;">
+                                        <button type="submit" class="btn-solid-green" :disabled="tenantForm.processing">
+                                            {{ tenantForm.processing ? 'Saving...' : 'Save Labels & Visibility' }}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+
                         </div>
                     </div>
 
@@ -344,6 +398,54 @@ const settingsForm = useForm({
     password_confirmation: '',
     profile_logo: null,
 });
+
+const defaultFormFields = {
+    business_name: { label: 'Business Name', is_visible: true },
+    contact_name: { label: 'Contact Name', is_visible: true },
+    last_name: { label: 'Last Name', is_visible: true },
+    contact_email: { label: 'Contact Email', is_visible: true },
+    phone: { label: 'Phone Number', is_visible: true },
+    secondary_contact_number: { label: 'Secondary Contact Number', is_visible: true },
+    biz_type: { label: 'Business Type', is_visible: true },
+    source: { label: 'Lead Source', is_visible: true },
+    division: { label: 'Division', is_visible: true },
+    township: { label: 'Township', is_visible: true },
+    address: { label: 'Address', is_visible: true },
+    product: { label: 'Product', is_visible: true },
+    package: { label: 'Package', is_visible: true },
+    package_total: { label: 'Package Total', is_visible: true },
+    discount: { label: 'Discount', is_visible: true },
+    note: { label: 'Note', is_visible: true },
+    status: { label: 'Status', is_visible: true },
+    channel: { label: 'Channel', is_visible: true },
+    installation_appointment: { label: 'Installation Appointment', is_visible: true },
+    est_contract_date: { label: 'Est. Contract Date', is_visible: true },
+    est_start_date: { label: 'Est. Start Date', is_visible: true },
+    est_follow_up_date: { label: 'Est. Follow Up Date', is_visible: true },
+    is_referral: { label: 'Referral ?', is_visible: true },
+    meeting_note: { label: 'Meeting Note', is_visible: true },
+    next_step: { label: 'Next Step', is_visible: true },
+};
+
+const tenantSettings = computed(() => auth.value?.tenant_settings?.form_fields || defaultFormFields);
+
+const tenantForm = useForm({
+    form_fields: JSON.parse(JSON.stringify(tenantSettings.value))
+});
+
+const saveFieldLabels = () => {
+    tenantForm.post('/settings/tenant-data', {
+        preserveScroll: true,
+        onSuccess: () => {
+            Swal.fire({
+                title: 'Success!',
+                text: 'Field labels have been successfully updated.',
+                icon: 'success',
+                confirmButtonColor: '#2ecc5e',
+            });
+        }
+    });
+};
 
 const dynamicFields = [
     { key: 'biz_type', label: 'Business Type' },

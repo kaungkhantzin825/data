@@ -7,12 +7,21 @@
                          alt="Pipeline" class="nav-logo" />
                 </div>
                 <div class="topbar-right">
-                    <div class="admin-menu" @click="adminOpen = !adminOpen">
-                        <img v-if="auth?.profile_logo" :src="auth.profile_logo" class="profile-avatar-small" alt="Avatar"/>
-                        <span class="admin-name">{{ auth?.name ?? 'admin' }}</span>
+                    <div class="admin-menu" @click="adminOpen = !adminOpen" style="padding: 6px 14px 6px 16px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 30px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s;">
+                        <div style="display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; margin-right: 12px;">
+                            <span style="font-size: 0.88rem; font-weight: 600; color: #111827;">
+                                {{ auth?.name ?? 'Admin' }}
+                                <span v-if="auth?.company_name" style="color: #6b7280; font-weight: 400; font-size: 0.8rem;"> @ {{ auth.company_name }}</span>
+                            </span>
+                            <span v-if="auth?.role" style="font-size: 0.7rem; color: #2ecc5e; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">{{ auth.role }}</span>
+                        </div>
+                        <img v-if="auth?.profile_logo" :src="auth.profile_logo" class="profile-avatar-small" alt="Avatar" style="margin-right: 0; width: 34px; height: 34px; box-shadow: none; border: 2px solid #e5e7eb;"/>
+                        <div v-else style="width: 34px; height: 34px; border-radius: 50%; background: #f3f4f6; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: center; color: #4b5563; font-weight: 600; font-size: 1rem;">
+                            {{ (auth?.name || 'A').charAt(0).toUpperCase() }}
+                        </div>
                         <v-icon :icon="adminOpen ? 'mdi-chevron-up' : 'mdi-chevron-down'"
-                            size="18" color="#374151" />
-                        <div v-if="adminOpen" class="admin-dropdown" @click.stop>
+                            size="18" color="#9ca3af" style="margin-left: 8px;" />
+                        <div v-if="adminOpen" class="admin-dropdown" @click.stop style="top: calc(100% + 8px); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
                             <div class="dd-item" @click="logout">
                                 <v-icon icon="mdi-logout" size="16" />
                                 Logout

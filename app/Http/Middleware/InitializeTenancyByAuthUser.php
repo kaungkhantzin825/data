@@ -14,10 +14,12 @@ class InitializeTenancyByAuthUser
         if (auth()->check()) {
             $user = auth()->user();
 
-           
             if ($user->is_admin) {
+                setPermissionsTeamId(0);
                 return $next($request);
             }
+
+            setPermissionsTeamId($user->tenant_id);
 
             if ($user->tenant_id) {
                 $tenant = Tenant::find($user->tenant_id);

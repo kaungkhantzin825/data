@@ -35,7 +35,7 @@
                                     <v-icon icon="mdi-domain" size="17"
                                         :color="cnf ? '#2ecc5e' : '#9ca3af'" />
                                     <input v-model="form.company_name" type="text"
-                                        placeholder="Company Name" class="fi"
+                                        placeholder="Organization Name" class="fi"
                                         @focus="cnf=true" @blur="cnf=false" />
                                 </div>
                                 <span v-if="errors.company_name" class="emsg">{{ errors.company_name }}</span>

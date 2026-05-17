@@ -5,6 +5,12 @@
             <div class="dtc-sub">Overview of lead performance and status</div>
         </div>
         <div class="dtc-right">
+            <div v-if="auth?.role === 'Company Super Admin' || auth?.is_admin" class="select-wrap-dash" style="min-width: 170px;">
+                <select class="dash-select" v-model="selectedUser" @change="$emit('update')">
+                    <option value="">All Users</option>
+                    <option v-for="user in availableUsers" :key="user.id" :value="user.id">{{ user.name }}</option>
+                </select>
+            </div>
             <div class="select-wrap-dash" style="min-width: 170px;">
                 <select class="dash-select" v-model="selectedPlan">
                     <option value="All Plans">All Plans</option>
@@ -26,9 +32,20 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
+import { usePage } from '@inertiajs/vue3';
+
+const page = usePage();
+const auth = computed(() => page.props.auth?.user);
+
 const selectedPlan  = defineModel('plan');
 const selectedMonth = defineModel('month');
 const selectedYear  = defineModel('year');
+const selectedUser  = defineModel('user');
+
+defineProps({
+    availableUsers: { type: Array, default: () => [] }
+});
 
 defineEmits(['update']);
 

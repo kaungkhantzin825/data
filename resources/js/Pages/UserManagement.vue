@@ -8,12 +8,21 @@
                          alt="Pipeline" class="nav-logo" />
                 </div>
                 <div class="topbar-right">
-                    <div class="admin-menu" @click="adminOpen = !adminOpen">
-                        <img v-if="auth?.profile_logo" :src="auth.profile_logo" class="profile-avatar-small" alt="Avatar"/>
-                        <span class="admin-name">{{ auth?.name ?? 'admin' }}</span>
+                    <div class="admin-menu" @click="adminOpen = !adminOpen" style="padding: 6px 14px 6px 16px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 30px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s;">
+                        <div style="display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; margin-right: 12px;">
+                            <span style="font-size: 0.88rem; font-weight: 600; color: #111827;">
+                                {{ auth?.name ?? 'Admin' }}
+                                <span v-if="auth?.company_name" style="color: #6b7280; font-weight: 400; font-size: 0.8rem;"> @ {{ auth.company_name }}</span>
+                            </span>
+                            <span v-if="auth?.role" style="font-size: 0.7rem; color: #2ecc5e; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">{{ auth.role }}</span>
+                        </div>
+                        <img v-if="auth?.profile_logo" :src="auth.profile_logo" class="profile-avatar-small" alt="Avatar" style="margin-right: 0; width: 34px; height: 34px; box-shadow: none; border: 2px solid #e5e7eb;"/>
+                        <div v-else style="width: 34px; height: 34px; border-radius: 50%; background: #f3f4f6; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: center; color: #4b5563; font-weight: 600; font-size: 1rem;">
+                            {{ (auth?.name || 'A').charAt(0).toUpperCase() }}
+                        </div>
                         <v-icon :icon="adminOpen ? 'mdi-chevron-up' : 'mdi-chevron-down'"
-                            size="18" color="#374151" />
-                        <div v-if="adminOpen" class="admin-dropdown" @click.stop>
+                            size="18" color="#9ca3af" style="margin-left: 8px;" />
+                        <div v-if="adminOpen" class="admin-dropdown" @click.stop style="top: calc(100% + 8px); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
                             <div class="dd-item" @click="logout">
                                 <v-icon icon="mdi-logout" size="16" />
                                 Logout
@@ -73,7 +82,7 @@
                                        
                                         <template v-if="tab === 'users'">
                                             <th>Name</th>
-                                            <th>Company</th>
+                                            <th>Organization</th>
                                             <th>Phone</th>
                                             <th>Email</th>
                                             <th>Role(s)</th>
@@ -104,8 +113,11 @@
                                             <td>{{ user.phone || '-' }}</td>
                                             <td>{{ user.email }}</td>
                                             <td>
-                                                <span v-for="ro in user.roles" :key="ro.id" class="role-badge">
+                                                <span v-for="ro in user.all_roles" :key="ro.id" class="role-badge">
                                                     {{ ro.name }}
+                                                </span>
+                                                <span v-if="!user.all_roles || user.all_roles.length === 0" class="role-badge" style="background: #f3f4f6; color: #6b7280; border: 1px dashed #9ca3af;">
+                                                    Pending Approval
                                                 </span>
                                             </td>
                                             <td>
@@ -158,9 +170,14 @@
                                                 <span v-if="!ro.permissions?.length" class="text-gray-400 text-sm">No permissions</span>
                                             </td>
                                             <td>
-                                                <button class="btn-edit" @click="openEditRole(ro)">
-                                                    <v-icon icon="mdi-shield-edit" size="14" /> Manage Permissions
-                                                </button>
+                                                <div style="display: flex; gap: 8px;">
+                                                    <button class="btn-edit" @click="openEditRole(ro)">
+                                                        <v-icon icon="mdi-shield-edit" size="14" /> Manage Permissions
+                                                    </button>
+                                                    <button class="btn-delete" @click="deleteRole(ro.id)" v-if="can('manage_roles')">
+                                                        <v-icon icon="mdi-delete" size="12" /> Delete
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     </template>
@@ -202,7 +219,7 @@
                             <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #f3f4f6; padding-bottom: 8px;">
                                 <span style="font-size:0.85rem; color:#6b7280; font-weight:600;">System Role</span>
                                 <span style="font-size:0.85rem; font-weight:500;">
-                                    {{ activeDetailUser.roles?.map(r => r.name).join(', ') || 'None' }}
+                                    {{ activeDetailUser.all_roles?.map(r => r.name).join(', ') || 'None' }}
                                 </span>
                             </div>
 
@@ -254,8 +271,8 @@
                             <span v-if="userForm.errors.name" class="error-text">{{ userForm.errors.name }}</span>
                         </div>
                         <div class="form-group">
-                            <label>Company Name</label>
-                            <input v-model="userForm.company_name" type="text" class="form-input" placeholder="Enter company name" />
+                            <label>Organization Name</label>
+                            <input v-model="userForm.company_name" type="text" class="form-input" placeholder="Enter organization name" />
                             <span v-if="userForm.errors.company_name" class="error-text">{{ userForm.errors.company_name }}</span>
                         </div>
                         <div class="form-group">
@@ -275,18 +292,14 @@
                         </div>
                         <div class="form-group">
                             <label>Confirm Password</label>
-                            <input v-model="userForm.password_confirmation" type="password" class="form-input" placeholder="Confirm password" />
+                                            <input v-model="userForm.password_confirmation" type="password" class="form-input" placeholder="Confirm password" />
                         </div>
-                        <div class="form-group" v-if="auth?.is_admin">
+                        <div class="form-group">
                             <label>Assign Roles</label>
                             <select v-model="userForm.roles" multiple class="form-input select-multiple">
-                                <option v-for="r in props.roles" :key="r.id" :value="r.name">{{ r.name }}</option>
+                                <option v-for="r in props.roles.filter(role => auth?.is_admin || auth?.roles?.includes('Company Super Admin') || role.name !== 'Company Super Admin')" :key="r.id" :value="r.name">{{ r.name }}</option>
                             </select>
                             <span class="help-text">Hold Ctrl/Cmd to select multiple roles.</span>
-                        </div>
-                        <div class="form-group" v-else>
-                            <label>Role</label>
-                            <input type="text" class="form-input" value="Staff" disabled style="background-color: #f3f4f6; color: #6b7280; border-color: #e5e7eb;" />
                         </div>
                         <template v-if="auth?.is_admin">
                             <div class="form-group" style="margin-top:16px;">
@@ -459,9 +472,7 @@ const groupedPermissions = computed(() => {
             groups['User Management'].push(p);
         } else if (p.name.includes('plan')) {
             groups['Plan Menu'].push(p);
-        } else if (p.name.includes('tenant_fields')) {
-            groups['Create Setting Menu'].push(p);
-        } else if (p.name.includes('setting')) {
+        } else if (p.name.includes('tenant_fields') || p.name.includes('setting')) {
             groups['Setting'].push(p);
         } else {
             // groups['Other Setup'].push(p);
@@ -565,7 +576,7 @@ const openEditUser = (u) => {
     userForm.company_name = u.company_name || '';
     userForm.phone = u.phone || '';
     userForm.email = u.email;
-    userForm.roles = u.roles ? u.roles.map(r => r.name) : [];
+    userForm.roles = u.all_roles ? u.all_roles.map(r => r.name) : [];
     userForm.plan_id = u.plan_id || null;
     userForm.plan_expired_at = u.plan_expired_at ? u.plan_expired_at.split('T')[0] : '';
     userDialog.value = true;
@@ -615,9 +626,17 @@ const saveRolePermissions = () => {
     roleForm.put(`/roles/${activeRole.value.id}`, {
         preserveScroll: true,
         onSuccess: () => {
+            if (page.props.flash.error) {
+                Swal.fire('Access Denied', page.props.flash.error, 'error');
+                return;
+            }
             roleForm.post(`/roles/${activeRole.value.id}/permissions`, {
                 preserveScroll: true,
                 onSuccess: () => {
+                    if (page.props.flash.error) {
+                        Swal.fire('Access Denied', page.props.flash.error, 'error');
+                        return;
+                    }
                     roleDialog.value = false;
                     roleForm.reset();
                     Swal.fire({
@@ -649,6 +668,35 @@ const deleteUser = (id) => {
                     Swal.fire({
                         title: 'Deleted!',
                         text: 'User has been successfully hidden.',
+                        icon: 'success',
+                        confirmButtonColor: '#2ecc5e'
+                    });
+                }
+            });
+        }
+    });
+};
+
+const deleteRole = (id) => {
+    Swal.fire({
+        title: 'Are you sure?',
+        text: "This role will be permanently deleted. Users with this role will lose their permissions.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#2ecc5e',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Yes, delete it!'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            router.delete(`/roles/${id}`, {
+                onSuccess: () => {
+                    if (page.props.flash.error) {
+                        Swal.fire('Access Denied', page.props.flash.error, 'error');
+                        return;
+                    }
+                    Swal.fire({
+                        title: 'Deleted!',
+                        text: 'Role has been successfully deleted.',
                         icon: 'success',
                         confirmButtonColor: '#2ecc5e'
                     });
