@@ -259,7 +259,7 @@ class DemoUserSeeder extends Seeder
 
     private function seedLeadsForTenant(?Tenant $tenant, array $creators): void
     {
-        if (!$tenant) return;
+        return; // Disabled lead seeding as requested
 
         $baseConnection = config('database.connections.mysql_central');
         config(['database.connections.tenant_setup' => array_merge($baseConnection, [
