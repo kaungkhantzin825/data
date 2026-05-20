@@ -129,7 +129,7 @@ class UserObserver
 
             // Clone default roles for the new tenant
             $globalRoles = \Spatie\Permission\Models\Role::whereNull('tenant_id')
-                ->whereIn('name', ['Company Super Admin', 'Company Admin', 'Staff'])
+                ->whereIn('name', ['Company Super Admin', 'Manager', 'User'])
                 ->with('permissions')
                 ->get();
             

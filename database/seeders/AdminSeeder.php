@@ -31,7 +31,7 @@ class AdminSeeder extends Seeder
             'setting_activity' => 'Activity Log',
             'setting_user_status' => 'User Login Status',
             'manage_plans' => 'Plan Menu',
-            'manage_tenant_fields' => 'Custom table title',
+            'manage_tenant_fields' => 'Custom table title (Data Setting)',
             'submenu_users' => 'Users Menu (User Management)',
             'submenu_roles' => 'Roles Menu (User Management)',
             'submenu_permissions' => 'Permissions Menu (User Management)',
@@ -44,42 +44,62 @@ class AdminSeeder extends Seeder
             );
         }
 
-        // Set global team id to 0 for global roles
+        // Set global team id to null/0 for global roles
         setPermissionsTeamId(0);
 
-        // Create Roles
-        $piplineAdminRole = Role::firstOrCreate(['name' => 'Pipline Admin', 'guard_name' => 'web', 'tenant_id' => null]);
+        // Create Roles (Matching User's Image)
+        $appAdminRole = Role::firstOrCreate(['name' => 'App Admin', 'guard_name' => 'web', 'tenant_id' => null]);
         $companySuperAdminRole = Role::firstOrCreate(['name' => 'Company Super Admin', 'guard_name' => 'web', 'tenant_id' => null]);
-        $companyAdminRole = Role::firstOrCreate(['name' => 'Company Admin', 'guard_name' => 'web', 'tenant_id' => null]);
-        $staffRole = Role::firstOrCreate(['name' => 'Staff', 'guard_name' => 'web', 'tenant_id' => null]);
+        $managerRole = Role::firstOrCreate(['name' => 'Manager', 'guard_name' => 'web', 'tenant_id' => null]);
+        $userRole = Role::firstOrCreate(['name' => 'User', 'guard_name' => 'web', 'tenant_id' => null]);
 
-        // Pipline Admin Permissions (Excludes Dashboard, Lead actions, Forms, and Create Setting Menu)
-        $piplineAdminPermissions = [
-            'view_users', 'create_users', 'edit_users', 'delete_users',
-            'manage_roles', 'manage_settings', 'setting_profile', 'setting_backup',
-            'setting_activity', 'setting_user_status', 'manage_plans',
-            'submenu_users', 'submenu_roles', 'submenu_permissions'
+        // App Admin: Plan Menu, Setting, Role, Permission
+        $appAdminPermissions = [
+            'manage_plans', 'manage_settings', 'setting_profile', 'setting_backup',
+            'setting_activity', 'setting_user_status', 'manage_roles', 
+            'submenu_roles', 'submenu_permissions'
         ];
-        $piplineAdminRole->syncPermissions(Permission::whereIn('name', $piplineAdminPermissions)->get());
+        $appAdminRole->syncPermissions(Permission::whereIn('name', $appAdminPermissions)->get());
 
-        // Staff, Company Admin, and Company Super Admin have all permissions EXCEPT manage_plans
-        $tenantPermissions = Permission::where('name', '!=', 'manage_plans')->get();
-        $staffRole->syncPermissions($tenantPermissions);
-        $companyAdminRole->syncPermissions($tenantPermissions);
-        $companySuperAdminRole->syncPermissions($tenantPermissions);
+        // Company Super Admin: Dashboard, List, Create, User Management (User, Role), Data Setting, Setting
+        $companySuperAdminPermissions = [
+            'view_dashboard', 'action_upload_lead', 'action_download_csv', 'section_lead_detail', 
+            'section_product', 'section_other_information',
+            'view_users', 'create_users', 'edit_users', 'delete_users', 'submenu_users',
+            'manage_roles', 'submenu_roles', 'manage_tenant_fields',
+            'manage_settings', 'setting_profile'
+        ];
+        $companySuperAdminRole->syncPermissions(Permission::whereIn('name', $companySuperAdminPermissions)->get());
+
+        // Manager: Dashboard, List, Create, User Management (User), Data Setting, Setting
+        $managerPermissions = [
+            'view_dashboard', 'action_upload_lead', 'action_download_csv', 'section_lead_detail', 
+            'section_product', 'section_other_information',
+            'view_users', 'create_users', 'edit_users', 'delete_users', 'submenu_users',
+            'manage_tenant_fields', 'manage_settings', 'setting_profile'
+        ];
+        $managerRole->syncPermissions(Permission::whereIn('name', $managerPermissions)->get());
+
+        // User: Dashboard, List, Create, Setting
+        $userPermissions = [
+            'view_dashboard', 'action_upload_lead', 'action_download_csv', 'section_lead_detail', 
+            'section_product', 'section_other_information',
+            'manage_settings', 'setting_profile'
+        ];
+        $userRole->syncPermissions(Permission::whereIn('name', $userPermissions)->get());
 
         $admin = User::firstOrCreate(
             ['email' => 'admin@pipeline.com'],
             [
-                'name' => 'Admin',
+                'name' => 'Pipeline Admin',
                 'password' => Hash::make('password'),
                 'is_admin' => true,
-                'role' => 'Pipline Admin', // Assign to Pipline Admin by default
+                'role' => 'App Admin', // Match new name
                 'email_verified_at' => now(),
             ]
         );
 
-        $admin->assignRole($piplineAdminRole);
+        $admin->assignRole($appAdminRole);
 
         $this->command->info('Setup complete: Permissions seeded, roles created and assigned.');
     }

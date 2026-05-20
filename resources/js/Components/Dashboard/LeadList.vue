@@ -6,12 +6,6 @@
                 <p class="card-sub">Manage leads generated outside the system</p>
             </div>
             <div class="card-actions">
-                <div v-if="auth?.role === 'Company Super Admin' || auth?.is_admin" class="select-wrap" style="margin-right: 8px;">
-                    <select v-model="filters.created_by" class="filter-select" style="min-width: 150px;" @change="$emit('apply')">
-                        <option value="">All Users</option>
-                        <option v-for="user in availableUsers" :key="user.id" :value="user.id">{{ user.name }}</option>
-                    </select>
-                </div>
                 <button class="btn-outline-green" @click="$emit('upload')">
                     <v-icon icon="mdi-upload" size="15" />
                     Upload Lead
@@ -57,6 +51,66 @@
                     </select>
                 </div>
             </div>
+            <!-- SUPER ADMIN cascading: Manager → Organization → Staff -->
+            <template v-if="superAdminData?.managers?.length">
+                <!-- Manager dropdown -->
+                <div class="filter-group">
+                    <label class="filter-label">Manager</label>
+                    <div class="select-wrap">
+                        <select v-model="filters.manager_id" class="filter-select" @change="filters.org_id = ''; filters.staff_id = ''">
+                            <option value="">All Managers</option>
+                            <option v-for="m in superAdminData.managers" :key="m.id" :value="m.id">{{ m.name }}</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Organization dropdown (filtered by manager) -->
+                <div class="filter-group" v-if="saFilteredOrgs.length">
+                    <label class="filter-label">Organization</label>
+                    <div class="select-wrap">
+                        <select v-model="filters.org_id" class="filter-select" @change="filters.staff_id = ''">
+                            <option value="">All Organizations</option>
+                            <option v-for="org in saFilteredOrgs" :key="org.id" :value="org.id">{{ org.name }}</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Staff dropdown (filtered by manager + org) -->
+                <div class="filter-group" v-if="saFilteredStaff.length">
+                    <label class="filter-label">Staff</label>
+                    <div class="select-wrap">
+                        <select v-model="filters.staff_id" class="filter-select">
+                            <option value="">All Staff</option>
+                            <option v-for="s in saFilteredStaff" :key="s.id" :value="s.id">{{ s.name }} ({{ s.lead_count }})</option>
+                        </select>
+                    </div>
+                </div>
+            </template>
+
+            <!-- MANAGER cascading: Organization → Staff (only if not Super Admin) -->
+            <template v-else>
+            <div class="filter-group" v-if="managerOrgs?.length">
+                <label class="filter-label">Organization</label>
+                <div class="select-wrap">
+                    <select v-model="filters.org_id" class="filter-select" @change="filters.staff_id = ''">
+                        <option value="">All Organizations</option>
+                        <option v-for="org in managerOrgs" :key="org.id" :value="org.id">
+                            {{ org.name }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+            <!-- Staff dropdown: filtered by selected org -->
+            <div class="filter-group" v-if="filteredStaffList?.length">
+                <label class="filter-label">Staff</label>
+                <div class="select-wrap">
+                    <select v-model="filters.staff_id" class="filter-select">
+                        <option value="">All Staff</option>
+                        <option v-for="s in filteredStaffList" :key="s.id" :value="s.id">
+                            {{ s.name }} ({{ s.lead_count }})
+                        </option>
+                    </select>
+                </div>
+            </div>
+            </template>
             <div class="filter-btns">
                 <button class="btn-search" @click="$emit('apply')">Search</button>
                 <button class="btn-reset"  @click="$emit('reset')">Reset</button>
@@ -166,16 +220,51 @@ const props = defineProps({
     filters: { type: Object, required: true },
     availablePlans: { type: Array, default: () => [] },
     availableBizTypes: { type: Array, default: () => [] },
-    availableUsers: { type: Array, default: () => [] }
+    availableUsers: { type: Array, default: () => [] },
+    staffList: { type: Array, default: () => [] },
+    managerOrgs: { type: Array, default: () => [] },
+    superAdminData: { type: Object, default: () => ({ managers: [], orgs: [], staff: [] }) },
 });
 
 const emit = defineEmits(['upload', 'download', 'apply', 'reset', 'edit', 'view', 'page']);
 
 const page = usePage();
 const auth = computed(() => page.props.auth?.user);
-const can = (p) => {
-    return auth.value?.permissions?.includes(p);
-};
+const can = (p) => auth.value?.permissions?.includes(p);
+
+// Super Admin: orgs filtered by selected manager (deduplicated when no manager selected)
+const saFilteredOrgs = computed(() => {
+    if (!props.superAdminData?.orgs?.length) return [];
+    if (props.filters.manager_id) {
+        return props.superAdminData.orgs.filter(o => String(o.manager_id) === String(props.filters.manager_id));
+    }
+    // No manager selected → deduplicate by org id
+    const seen = new Set();
+    return props.superAdminData.orgs.filter(o => {
+        if (seen.has(o.id)) return false;
+        seen.add(o.id);
+        return true;
+    });
+});
+
+// Super Admin: staff filtered by selected manager AND org
+const saFilteredStaff = computed(() => {
+    if (!props.superAdminData?.staff?.length) return [];
+    let list = props.superAdminData.staff;
+    if (props.filters.manager_id) {
+        list = list.filter(s => String(s.manager_id) === String(props.filters.manager_id));
+    }
+    if (props.filters.org_id) {
+        list = list.filter(s => s.org_ids?.map(String).includes(String(props.filters.org_id)));
+    }
+    return list;
+});
+
+// Manager: staff filtered by selected org
+const filteredStaffList = computed(() => {
+    if (!props.filters.org_id) return props.staffList;
+    return props.staffList.filter(s => s.org_ids?.map(String).includes(String(props.filters.org_id)));
+});
 
 const fields = computed(() => {
     const custom = page.props.auth?.user?.tenant_settings?.form_fields || {};

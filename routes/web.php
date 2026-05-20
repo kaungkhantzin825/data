@@ -95,9 +95,18 @@ Route::middleware(['auth', 'tenant'])->group(function () {
   
     Route::post('/roles', [RoleController::class, 'store']);
     Route::put('/roles/{role}', [RoleController::class, 'update']);
+    Route::put('/roles/{role}/delete', [RoleController::class, 'destroy']);
     Route::post('/roles/{role}/permissions', [RoleController::class, 'syncPermissions'])->name('roles.permissions');
     
     Route::post('/permissions', [RoleController::class, 'storePermission']);
+
+    // Organization management (Super Admin only)
+    Route::post('/organizations', [\App\Http\Controllers\OrganizationController::class, 'store'])->name('organizations.store');
+    Route::put('/organizations/{organization}', [\App\Http\Controllers\OrganizationController::class, 'update'])->name('organizations.update');
+    Route::delete('/organizations/{organization}', [\App\Http\Controllers\OrganizationController::class, 'destroy'])->name('organizations.destroy');
+
+    // Transfer staff to a different organization / manager
+    Route::post('/users/{user}/transfer', [\App\Http\Controllers\UserController::class, 'transferStaff'])->name('users.transfer');
 
     
     Route::get('/settings', [\App\Http\Controllers\ProfileController::class, 'index'])->name('settings.index');

@@ -17,21 +17,28 @@ class UserController extends Controller
 {
     public function index()
     {
-        $usersQuery = User::on('mysql_central')->with(['allRoles', 'tenant', 'plan', 'staff'])->latest();
+        $usersQuery = User::on('mysql_central')->with(['allRoles', 'tenant', 'plan', 'staff', 'organizations', 'manager'])->latest();
 
         if (!auth()->user()->is_admin) {
             $tenantId = auth()->user()->tenant_id ?: auth()->id();
             $usersQuery->where('tenant_id', $tenantId);
             
             $authUser = auth()->user();
-            if ($authUser->hasRole('Company Admin')) {
-                // A Company Admin should only see themselves and users they created
-                $usersQuery->where(function($q) use ($authUser) {
-                    $q->where('id', $authUser->id)
-                      ->orWhere('created_by', $authUser->id);
-                });
-            } else if ($authUser->hasRole('Staff')) {
-                // A Staff should only see themselves
+            if ($authUser->hasRole('Company Super Admin')) {
+                // Sees everyone in the tenant
+            } elseif ($authUser->hasRole('Manager')) {
+                // A Manager should only see Users (Staff) in their assigned organizations
+                $orgIds = $authUser->organizations()->pluck('organizations.id')->toArray();
+                $usersQuery
+                    ->whereHas('organizations', function($q2) use ($orgIds) {
+                        $q2->whereIn('organizations.id', $orgIds);
+                    })
+                    // Exclude Super Admins and other Managers from Manager's view
+                    ->whereDoesntHave('allRoles', function($q2) {
+                        $q2->whereIn('name', ['Company Super Admin', 'Manager']);
+                    });
+            } else {
+                // A User should only see themselves
                 $usersQuery->where('id', $authUser->id);
             }
         } else {
@@ -45,10 +52,12 @@ class UserController extends Controller
         if (!auth()->user()->is_admin) {
             $rolesQuery->where('tenant_id', $tenantId);
             
-            if (auth()->user()->hasRole('Company Admin')) {
-                $rolesQuery->where('name', 'Staff');
-            } else if (auth()->user()->hasRole('Staff')) {
-                // Staff shouldn't be able to create users anyway, but just in case
+            if (auth()->user()->hasRole('Company Super Admin')) {
+                $rolesQuery->whereIn('name', ['Manager', 'User']);
+            } elseif (auth()->user()->hasRole('Manager')) {
+                $rolesQuery->where('name', 'User');
+            } else {
+                // User shouldn't be able to create users anyway, but just in case
                 $rolesQuery->where('id', -1); 
             }
         } else {
@@ -58,11 +67,19 @@ class UserController extends Controller
         $permissions = Permission::on('mysql_central')->get();
         $plans = Plan::on('mysql_central')->get();
 
+        // Scope organizations: Manager sees only their own orgs; Super Admin sees all tenant orgs
+        if (!auth()->user()->is_admin && auth()->user()->hasRole('Manager')) {
+            $organizations = auth()->user()->organizations()->get(['organizations.id', 'organizations.name']);
+        } else {
+            $organizations = \App\Models\Organization::where('tenant_id', $tenantId ?? null)->get();
+        }
+
         return Inertia::render('UserManagement', [
             'users' => $users,
             'roles' => $roles,
             'permissions' => $permissions,
-            'plans' => $plans
+            'plans' => $plans,
+            'organizations' => $organizations
         ]);
     }
 
@@ -87,6 +104,7 @@ class UserController extends Controller
             'email' => ['required', 'email', Rule::unique(User::class, 'email')],
             'password' => ['required', 'confirmed', Password::defaults()],
             'roles' => 'nullable|array',
+            'organizations' => 'nullable|array',
             'plan_id' => ['nullable', Rule::exists(Plan::class, 'id')],
         ]);
 
@@ -104,16 +122,18 @@ class UserController extends Controller
             : ($authUser->tenant_id ?: $authUser->id);
 
         $user = User::create([
-            'name' => $request->name,
-            'company_name' => $request->company_name,
-            'phone' => $request->phone,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'is_active' => $authUser->is_admin ? true : false,
-            'tenant_id' => $newTenantId,
-            'plan_id' => $authUser->is_admin ? $request->plan_id : $authUser->plan_id,
-            'plan_expired_at' => $calculatedPlanExpiredAt,
-            'created_by' => $authUser->id,
+            'name'           => $request->name,
+            'company_name'   => $request->company_name,
+            'phone'          => $request->phone,
+            'email'          => $request->email,
+            'password'       => Hash::make($request->password),
+            'is_active'      => $authUser->is_admin ? true : true, // Active by default within tenant
+            'tenant_id'      => $newTenantId,
+            'plan_id'        => $authUser->is_admin ? $request->plan_id : $authUser->plan_id,
+            'plan_expired_at'=> $calculatedPlanExpiredAt,
+            'created_by'     => $authUser->id,
+            // Set manager_id: if creator is a Manager, link staff to them
+            'manager_id'     => $authUser->hasRole('Manager') ? $authUser->id : null,
         ]);
 
         // Refresh to get tenant_id generated by UserObserver
@@ -124,7 +144,25 @@ class UserController extends Controller
         if ($request->has('roles') && count($request->roles) > 0) {
             $user->syncRoles($request->roles);
         } else {
-            $user->assignRole('Staff');
+            $user->assignRole('User'); // Default to User instead of Staff
+        }
+
+        // Sync organizations
+        if ($authUser->hasRole('Company Super Admin')) {
+            if ($request->has('organizations')) {
+                $user->organizations()->sync($request->organizations);
+            }
+        } elseif ($authUser->hasRole('Manager')) {
+            // Managers can only assign organizations they belong to
+            $allowedOrgs = $authUser->organizations()->pluck('organizations.id')->toArray();
+            $requestedOrgs = $request->input('organizations', []);
+            $validOrgs = array_intersect($requestedOrgs, $allowedOrgs);
+            
+            // If they didn't specify, default to all their orgs (or let UI handle it)
+            if (empty($validOrgs) && empty($requestedOrgs)) {
+                $validOrgs = $allowedOrgs; 
+            }
+            $user->organizations()->sync($validOrgs);
         }
 
         setPermissionsTeamId($originalTeamId);
@@ -150,6 +188,7 @@ class UserController extends Controller
             'email' => ['required', 'email', Rule::unique(User::class, 'email')->ignore($user->id)],
             'password' => ['nullable', 'confirmed', Password::defaults()],
             'roles' => 'nullable|array',
+            'organizations' => 'nullable|array',
             'plan_id' => ['nullable', Rule::exists(Plan::class, 'id')],
         ]);
 
@@ -185,6 +224,19 @@ class UserController extends Controller
             }
             $user->syncRoles($request->roles);
             setPermissionsTeamId($originalTeamId);
+        }
+
+        $authUser = auth()->user();
+        if ($authUser->hasRole('Company Super Admin')) {
+            if ($request->has('organizations')) {
+                $user->organizations()->sync($request->organizations);
+            }
+        } elseif ($authUser->hasRole('Manager')) {
+            if ($request->has('organizations')) {
+                $allowedOrgs = $authUser->organizations()->pluck('organizations.id')->toArray();
+                $validOrgs = array_intersect($request->organizations, $allowedOrgs);
+                $user->organizations()->sync($validOrgs);
+            }
         }
 
         ActivityLog::create([
@@ -236,5 +288,46 @@ class UserController extends Controller
             ]);
         }
         return redirect()->back()->with('success', 'User status updated successfully.');
+    }
+
+    /**
+     * Transfer a Staff member to a different Organization and/or Manager.
+     * Only Company Super Admin can do this.
+     */
+    public function transferStaff(Request $request, User $user)
+    {
+        $authUser = auth()->user();
+
+        if (!$authUser->hasRole('Company Super Admin') && !$authUser->is_admin) {
+            return back()->withErrors(['error' => 'Only Company Super Admins can transfer staff.']);
+        }
+
+        $request->validate([
+            'organization_id' => 'required|exists:organizations,id',
+            'manager_id'      => 'nullable|exists:users,id',
+        ]);
+
+        // Ensure the target organization belongs to this Super Admin's tenant
+        $org = \App\Models\Organization::findOrFail($request->organization_id);
+        if ($org->tenant_id !== $authUser->tenant_id) {
+            return back()->withErrors(['error' => 'You can only assign staff to organizations within your company.']);
+        }
+
+        // Reassign the organization
+        $user->organizations()->sync([$request->organization_id]);
+
+        // Reassign the manager
+        $user->manager_id = $request->manager_id;
+        $user->save();
+
+        ActivityLog::create([
+            'user_id'     => $authUser->id,
+            'action'      => 'staff_transferred',
+            'description' => "Transferred {$user->name} to organization: {$org->name}",
+            'ip_address'  => request()->ip(),
+            'user_agent'  => request()->userAgent(),
+        ]);
+
+        return back()->with('success', "{$user->name} has been transferred to {$org->name} successfully.");
     }
 }

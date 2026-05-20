@@ -38,6 +38,7 @@ class User extends Authenticatable
         'is_active',
         'password',
         'created_by',
+        'manager_id',
     ];
 
     /**
@@ -76,6 +77,22 @@ class User extends Authenticatable
         return $this->hasMany(User::class, 'tenant_id', 'id')->where('id', '!=', $this->id);
     }
 
+    /**
+     * The Manager this Staff member is assigned under.
+     */
+    public function manager()
+    {
+        return $this->belongsTo(User::class, 'manager_id');
+    }
+
+    /**
+     * All Staff members this Manager manages.
+     */
+    public function managedStaff()
+    {
+        return $this->hasMany(User::class, 'manager_id');
+    }
+
     public function allRoles()
     {
         return $this->morphToMany(
@@ -85,5 +102,10 @@ class User extends Authenticatable
             config('permission.column_names.model_morph_key'),
             'role_id'
         );
+    }
+
+    public function organizations()
+    {
+        return $this->belongsToMany(Organization::class);
     }
 }

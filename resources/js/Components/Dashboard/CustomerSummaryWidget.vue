@@ -53,38 +53,7 @@
             </div>
         </div>
 
-        <div class="dw-header" style="margin-top: 40px; border-top: 1px solid #f3f4f6; padding-top: 20px;">
-            <div class="dw-title" style="color:#2ecc71; font-weight: 600;">Sale Person for {{ plan }} Customer</div>
-        </div>
-        <div class="dw-table-wrap">
-            <table class="dw-table">
-                <thead>
-                    <tr>
-                        <th style="padding-left:16px;">Name</th><th class="text-center">No of link</th><th class="text-right" style="padding-right:16px;">Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template v-if="activeData.sales_persons?.length">
-                        <tr v-for="sp in activeData.sales_persons" :key="sp.name">
-                            <td style="padding-left:16px; color:#6b7280;">{{ sp.name }}</td>
-                            <td class="text-center">{{ sp.links }}</td>
-                            <td class="text-right" style="padding-right:16px; font-weight:700;">{{ Number(sp.amount).toLocaleString() }}</td>
-                        </tr>
-                    </template>
-                    <tr v-else>
-                        <td colspan="3" class="text-center" style="padding:20px; color:#9ca3af;font-style:italic;">No sales data available.</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        <div class="dw-footer">
-            <div class="dw-f-text">Showing 1 to {{ activeData.sales_persons?.length || 0 }} of {{ activeData.sales_persons?.length || 0 }} entries</div>
-            <div class="dw-pagination">
-                <button>&lt;</button>
-                <button class="active">1</button>
-                <button>&gt;</button>
-            </div>
-        </div>
+        <!-- Sale Person section hidden — staff performance visible via filter dropdowns -->
     </div>
 </template>
 

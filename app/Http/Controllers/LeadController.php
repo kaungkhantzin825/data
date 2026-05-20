@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Lead;
 use App\Models\Tenant;
 use App\Models\TenantFieldOption;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -12,162 +13,175 @@ class LeadController extends Controller
 {
     public function dashboard(Request $request)
     {
-        $query = Lead::query()->with('creator:id,name');
-        
-        $user = auth()->user();
-        if ($user->hasRole('Staff')) {
-            $query->where('created_by', $user->id);
-        }
+        $user     = auth()->user();
+        $reqMonth = (int) $request->input('month', now()->month);
+        $reqYear  = (int) $request->input('year',  now()->year);
 
-        
-        if ($request->has('user_id') && $request->user_id !== '') {
-            $selectedUser = \App\Models\User::find($request->user_id);
-            if ($selectedUser && $selectedUser->hasRole('Company Admin')) {
-                $staffIds = \App\Models\User::where('created_by', $selectedUser->id)->pluck('id')->toArray();
-                $allIds = array_merge([$selectedUser->id], $staffIds);
-                $query->whereIn('created_by', $allIds);
+        $query = Lead::query()->with('creator:id,name');
+
+        // ── Visibility scope ────────────────────────────────────────────
+        if (!$user->is_admin) {
+            if ($user->hasRole('Company Super Admin')) {
+                // Scoped by manager if selected
+                if ($request->manager_id) {
+                    $mStaffIds   = User::where('manager_id', $request->manager_id)->pluck('id')->toArray();
+                    $mCreators   = array_merge([$request->manager_id], $mStaffIds);
+                    $mOrgIds     = User::find($request->manager_id)?->organizations()->pluck('organizations.id')->toArray() ?? [];
+                    $query->where(function($q) use ($mCreators, $mOrgIds) {
+                        $q->whereIn('created_by', $mCreators)->orWhereIn('organization_id', $mOrgIds);
+                    });
+                }
+            } elseif ($user->hasRole('Manager')) {
+                $orgIds          = $user->organizations()->pluck('organizations.id')->toArray();
+                $staffIds        = User::where('manager_id', $user->id)->pluck('id')->toArray();
+                $visibleCreators = array_merge([$user->id], $staffIds);
+                $query->where(function($q) use ($orgIds, $visibleCreators) {
+                    $q->whereIn('created_by', $visibleCreators)->orWhereIn('organization_id', $orgIds);
+                });
             } else {
-                $query->where('created_by', $request->user_id);
+                $query->where('created_by', $user->id);
             }
         }
 
-        $allLeads = $query->get();
-        $now = \Carbon\Carbon::now();
+        // ── Additional filters ───────────────────────────────────────────
+        if ($request->plan)     { $query->where('plan', $request->plan); }
+        if ($request->biz_type) { $query->where('biz_type', $request->biz_type); }
+        if ($request->status)   { $query->where('status', $request->status); }
 
+        if ($request->org_id) {
+            $staffInOrg = User::whereHas('organizations', fn($q) => $q->where('organizations.id', $request->org_id))->pluck('id')->toArray();
+            $query->where(function($q) use ($request, $staffInOrg) {
+                $q->where('organization_id', $request->org_id)->orWhereIn('created_by', $staffInOrg);
+            });
+        }
+
+        if ($request->staff_id) {
+            $query->where('created_by', $request->staff_id);
+        }
+
+        $allLeads = $query->get();
+
+        // ── Metrics builder ──────────────────────────────────────────────
         $buildMetrics = function ($leadsDataset) {
             return [
-            'total_customers' => $leadsDataset->count(),
-            'total_amount' => $leadsDataset->sum(function ($l) {
-                    return floatval($l->amount ?: $l->package_total ?: 0);
-                }
-                ),
-                'recent_leads' => $leadsDataset->sortByDesc('id')->take(5)->map(function ($l) {
-                    return [
-                    'id' => $l->id,
-                    'business_name' => $l->business_name ?: $l->contact_name ?: 'Unknown',
-                    'biz_type' => $l->biz_type ?? 'N/A',
-                    'package' => $l->package ?? 'N/A',
-                    'weight' => $l->potential ?? '0%',
-                    'plan' => $l->plan ?? 'N/A',
-                    'amount' => floatval($l->amount ?: $l->package_total ?: 0),
-                    'creator_name' => $l->creator ? $l->creator->name : 'Unknown'
-                    ];
-                }
-                )->values(),
-                'sales_persons' => $leadsDataset->groupBy('created_by')->map(function ($group) {
+                'total_customers' => $leadsDataset->count(),
+                'total_amount'    => $leadsDataset->sum(fn($l) => floatval($l->amount ?: $l->package_total ?: 0)),
+                'recent_leads'    => $leadsDataset->sortByDesc('id')->take(5)->map(fn($l) => [
+                    'id'           => $l->id,
+                    'business_name'=> $l->business_name ?: $l->contact_name ?: 'Unknown',
+                    'biz_type'     => $l->biz_type     ?? 'N/A',
+                    'package'      => $l->package      ?? 'N/A',
+                    'plan'         => $l->plan         ?? 'N/A',
+                    'amount'       => floatval($l->amount ?: $l->package_total ?: 0),
+                    'creator_name' => $l->creator?->name ?? 'Unknown',
+                ])->values(),
+                'sales_persons'   => $leadsDataset->groupBy('created_by')->map(function($group) {
                     $creator = $group->first()->creator;
                     return [
-                    'name' => $creator ? $creator->name : 'Unknown',
-                    'links' => $group->count(),
-                    'amount' => $group->sum(function ($l) {
-                            return floatval($l->amount ?: $l->package_total ?: 0);
-                        }
-                        )
-                        ];
-                    }
-                    )->values()->sortByDesc('amount')->take(5)->values()
+                        'name'   => $creator?->name ?? 'Unknown',
+                        'links'  => $group->count(),
+                        'amount' => $group->sum(fn($l) => floatval($l->amount ?: $l->package_total ?: 0)),
                     ];
-                };
-
-        $summaryPlans = ['Enterprise', 'Business DIA', 'MojoeElite', 'Premium Home Fiber', 'Staff Plan'];
-        
-        $summaryReports = [];
-        $reqMonth = $request->input('month', now()->month);
-        $reqYear = $request->input('year', now()->year);
-
-        foreach ($summaryPlans as $plan) {
-            $planLeads = $allLeads->filter(function ($l) use ($plan) {
-                $p = strtolower($l->plan ?? '');
-                $pkg = strtolower($l->package ?? '');
-                $search = strtolower($plan);
-                return str_contains($p, $search) || str_contains($pkg, $search);
-            });
-
-            $filteredLeads = $planLeads->filter(function ($l) use ($reqMonth, $reqYear) {
-                if (!$l->created_at) return false;
-                $ca = \Carbon\Carbon::parse($l->created_at);
-                return $ca->month == $reqMonth && $ca->year == $reqYear;
-            });
-
-            $summaryReports[$plan] = [
-                'Monthly' => $buildMetrics($filteredLeads),
-                'Quarterly' => $buildMetrics($planLeads->filter(fn($l) => $l->created_at && \Carbon\Carbon::parse($l->created_at)->diffInDays(now()) <= 90)),
-                'Yearly' => $buildMetrics($planLeads->filter(fn($l) => $l->created_at && \Carbon\Carbon::parse($l->created_at)->diffInDays(now()) <= 365)),
+                })->values()->sortByDesc('amount')->take(5)->values(),
             ];
-        }
+        };
 
-        $diaPlans = ['Enterprise DIA', 'Business DIA', 'MojoeElite'];
-        $diaReports = [];
-        foreach ($diaPlans as $plan) {
-            $planLeads = $allLeads->filter(function ($l) use ($plan, $reqMonth, $reqYear) {
-                $p = strtolower($l->plan ?? '');
-                $pkg = strtolower($l->package ?? '');
-                $search = strtolower($plan);
-
-                $match = false;
-                if (str_contains($search, 'dia')) {
-                    $match = (str_contains($p, 'dia') || str_contains($pkg, 'dia'));
-                }
-                else {
-                    $match = (str_contains($p, $search) || str_contains($pkg, $search));
-                }
-
-                if (!$match) return false;
-
-                $ca = \Carbon\Carbon::parse($l->created_at);
-                return $ca->month == $reqMonth && $ca->year == $reqYear;
-            });
-
-            $diaReports[$plan] = $buildMetrics($planLeads);
-        }
-
-        $expiringPlans = [];
-        if (auth()->user()->is_admin) {
-            $expiringPlans = \App\Models\User::whereNotNull('plan_expired_at')
-                ->where('plan_expired_at', '<=', \Carbon\Carbon::now()->addDays(7))
-                ->get(['id', 'name', 'email', 'plan_expired_at']);
-        }
-
-       
-        $monthLeads = $allLeads->filter(function ($l) use ($reqMonth, $reqYear) {
+        // ── Monthly & plan reports ────────────────────────────────────────
+        $monthLeads = $allLeads->filter(function($l) use ($reqMonth, $reqYear) {
             if (!$l->created_at) return false;
             $ca = \Carbon\Carbon::parse($l->created_at);
             return $ca->month == $reqMonth && $ca->year == $reqYear;
         });
 
-        $allLeadsReport = $buildMetrics($allLeads);
+        $summaryPlans   = ['Enterprise', 'Business DIA', 'MojoeElite', 'Premium Home Fiber', 'Staff Plan'];
+        $summaryReports = [];
+        foreach ($summaryPlans as $plan) {
+            $planLeads = $allLeads->filter(function($l) use ($plan) {
+                $p   = strtolower($l->plan    ?? '');
+                $pkg = strtolower($l->package ?? '');
+                $s   = strtolower($plan);
+                return str_contains($p, $s) || str_contains($pkg, $s);
+            });
+            $filteredLeads          = $planLeads->filter(fn($l) => $l->created_at && \Carbon\Carbon::parse($l->created_at)->month == $reqMonth && \Carbon\Carbon::parse($l->created_at)->year == $reqYear);
+            $summaryReports[$plan]  = [
+                'Monthly'   => $buildMetrics($filteredLeads),
+                'Quarterly' => $buildMetrics($planLeads->filter(fn($l) => $l->created_at && \Carbon\Carbon::parse($l->created_at)->diffInDays(now()) <= 90)),
+                'Yearly'    => $buildMetrics($planLeads->filter(fn($l) => $l->created_at && \Carbon\Carbon::parse($l->created_at)->diffInDays(now()) <= 365)),
+            ];
+        }
+
+        $diaPlans   = ['Enterprise DIA', 'Business DIA', 'MojoeElite'];
+        $diaReports = [];
+        foreach ($diaPlans as $plan) {
+            $planLeads = $allLeads->filter(function($l) use ($plan, $reqMonth, $reqYear) {
+                $p = strtolower($l->plan ?? ''); $pkg = strtolower($l->package ?? ''); $s = strtolower($plan);
+                $match = str_contains($s, 'dia') ? (str_contains($p, 'dia') || str_contains($pkg, 'dia')) : (str_contains($p, $s) || str_contains($pkg, $s));
+                if (!$match) return false;
+                $ca = \Carbon\Carbon::parse($l->created_at);
+                return $ca->month == $reqMonth && $ca->year == $reqYear;
+            });
+            $diaReports[$plan] = $buildMetrics($planLeads);
+        }
+
+        $allLeadsReport  = $buildMetrics($allLeads);
         $monthlyOverview = $buildMetrics($monthLeads);
 
-        $tenantId = auth()->user()->is_admin ? null : (auth()->user()->tenant_id ?: auth()->id());
-        
-        $userQuery = \App\Models\User::with('roles');
-        if ($tenantId) {
-            $userQuery->where('tenant_id', $tenantId);
+        // ── Cascading filter data ─────────────────────────────────────────
+        $staffList      = [];
+        $managerOrgs    = [];
+        $superAdminData = [];
+        $availablePlans    = Lead::whereNotNull('plan')->where('plan', '!=', '')->distinct()->pluck('plan');
+        $availableBizTypes = Lead::whereNotNull('biz_type')->where('biz_type', '!=', '')->distinct()->pluck('biz_type');
+
+        if (!$user->is_admin && $user->hasRole('Manager')) {
+            $orgs   = $user->organizations()->get(['organizations.id', 'organizations.name']);
+            $orgIds = $orgs->pluck('id')->toArray();
+            $myStaff = User::where('manager_id', $user->id)->select('id', 'name')
+                ->with(['organizations' => fn($q) => $q->whereIn('organizations.id', $orgIds)->select('organizations.id')])->get();
+            $staffList = $myStaff->map(fn($s) => [
+                'id' => $s->id, 'name' => $s->name,
+                'org_ids' => $s->organizations->pluck('id')->toArray(),
+            ])->values()->toArray();
+            $managerOrgs = $orgs->map(fn($org) => ['id' => $org->id, 'name' => $org->name])->values()->toArray();
+
+        } elseif (!$user->is_admin && $user->hasRole('Company Super Admin')) {
+            $allManagers = User::where('tenant_id', $user->tenant_id)
+                ->whereHas('roles', fn($q) => $q->where('name', 'Manager'))->select('id', 'name')->get();
+            $superAdminData['managers'] = $allManagers->map(fn($m) => ['id' => $m->id, 'name' => $m->name])->values()->toArray();
+            $superAdminData['orgs']  = [];
+            $superAdminData['staff'] = [];
+            foreach ($allManagers as $manager) {
+                $mOrgs   = $manager->organizations()->get(['organizations.id', 'organizations.name']);
+                $mOrgIds = $mOrgs->pluck('id')->toArray();
+                foreach ($mOrgs as $org) {
+                    $superAdminData['orgs'][] = ['id' => $org->id, 'name' => $org->name, 'manager_id' => $manager->id];
+                }
+                $mStaff = User::where('manager_id', $manager->id)->select('id', 'name')
+                    ->with(['organizations' => fn($q) => $q->whereIn('organizations.id', $mOrgIds)->select('organizations.id')])->get();
+                foreach ($mStaff as $s) {
+                    $superAdminData['staff'][] = ['id' => $s->id, 'name' => $s->name, 'manager_id' => $manager->id, 'org_ids' => $s->organizations->pluck('id')->toArray()];
+                }
+            }
         }
-        
-        $availableUsers = $userQuery->get()->filter(function($u) {
-            return $u->hasRole('Company Admin');
-        })->map(function($u) {
-            return [
-                'id' => $u->id,
-                'name' => $u->name . ' (Company Admin)',
-            ];
-        })->values();
 
         return Inertia::render('Dashboard', [
-            'activeTab'      => 'dashboard',
-            'summaryReports' => $summaryReports,
-            'diaReports'     => $diaReports,
-            'totalLeads'     => $allLeads->count(),
-            'allLeadsReport' => $allLeadsReport,
-            'monthlyOverview'=> $monthlyOverview,
-            'expiringPlans'  => $expiringPlans,
-            'reqMonth'       => $reqMonth,
-            'reqYear'        => $reqYear,
-            'availableUsers' => $availableUsers,
-            'filters'        => ['user_id' => $request->user_id],
-            'fieldOptions'   => $this->getTenantFieldOptions(),
+            'activeTab'        => 'dashboard',
+            'summaryReports'   => $summaryReports,
+            'diaReports'       => $diaReports,
+            'totalLeads'       => $allLeads->count(),
+            'allLeadsReport'   => $allLeadsReport,
+            'monthlyOverview'  => $monthlyOverview,
+            'reqMonth'         => $reqMonth,
+            'reqYear'          => $reqYear,
+            'availablePlans'   => $availablePlans,
+            'availableBizTypes'=> $availableBizTypes,
+            'staffList'        => $staffList,
+            'managerOrgs'      => $managerOrgs,
+            'superAdminData'   => $superAdminData,
+            'filters'          => $request->only(['plan', 'biz_type', 'status', 'manager_id', 'org_id', 'staff_id', 'month', 'year']),
+            'fieldOptions'     => $this->getTenantFieldOptions(),
         ]);
+
     }
 
     public function index(Request $request)
@@ -175,8 +189,30 @@ class LeadController extends Controller
         $query = Lead::query();
         
         $user = auth()->user();
-        if ($user->hasRole('Staff')) {
-            $query->where('created_by', $user->id);
+        if (!$user->is_admin) {
+            if ($user->hasRole('Company Super Admin')) {
+                // Super Admin: if manager_id filter applied, scope to that manager's data
+                if ($request->manager_id) {
+                    $managerStaffIds = User::where('manager_id', $request->manager_id)->pluck('id')->toArray();
+                    $visibleCreators = array_merge([$request->manager_id], $managerStaffIds);
+                    $managerOrgIds   = User::find($request->manager_id)?->organizations()->pluck('organizations.id')->toArray() ?? [];
+                    $query->where(function($q) use ($visibleCreators, $managerOrgIds) {
+                        $q->whereIn('created_by', $visibleCreators)
+                          ->orWhereIn('organization_id', $managerOrgIds);
+                    });
+                }
+            } elseif ($user->hasRole('Manager')) {
+                // Manager sees leads uploaded by their direct staff AND leads in their orgs
+                $orgIds = $user->organizations()->pluck('organizations.id')->toArray();
+                $staffIds = User::where('manager_id', $user->id)->pluck('id')->toArray();
+                $visibleCreators = array_merge([$user->id], $staffIds);
+                $query->where(function($q) use ($orgIds, $visibleCreators) {
+                    $q->whereIn('created_by', $visibleCreators)
+                      ->orWhereIn('organization_id', $orgIds);
+                });
+            } else {
+                $query->where('created_by', $user->id);
+            }
         }
         
         if ($request->search) {
@@ -195,52 +231,134 @@ class LeadController extends Controller
             $query->where('biz_type', $request->biz_type);
         }
 
+        // Status filter
         if ($request->status) {
             $query->where('status', $request->status);
         }
 
-        if ($request->created_by) {
-            $selectedUser = \App\Models\User::find($request->created_by);
-            if ($selectedUser && $selectedUser->hasRole('Company Admin')) {
-                $staffIds = \App\Models\User::where('created_by', $selectedUser->id)->pluck('id')->toArray();
-                $allIds = array_merge([$selectedUser->id], $staffIds);
-                $query->whereIn('created_by', $allIds);
-            } else {
-                $query->where('created_by', $request->created_by);
-            }
+        // Org filter — show leads tagged to that org OR uploaded by any staff in that org
+        if ($request->org_id) {
+            $staffInOrg = User::whereHas('organizations', function($q) use ($request) {
+                $q->where('organizations.id', $request->org_id);
+            })->pluck('id')->toArray();
+
+            $query->where(function($q) use ($request, $staffInOrg) {
+                $q->where('organization_id', $request->org_id)
+                  ->orWhereIn('created_by', $staffInOrg);
+            });
+        }
+
+        // Staff filter — filter leads by specific staff member
+        if ($request->staff_id) {
+            $query->where('created_by', $request->staff_id);
         }
 
         \Log::info('Lead Query:', ['sql' => $query->toSql(), 'bindings' => $query->getBindings(), 'user' => auth()->id()]);
 
         $leads = $query->orderByDesc('id')->paginate(10)->withQueryString();
 
-        $availablePlans = Lead::whereNotNull('plan')->where('plan', '!=', '')->distinct()->pluck('plan');
+        $availablePlans    = Lead::whereNotNull('plan')->where('plan', '!=', '')->distinct()->pluck('plan');
         $availableBizTypes = Lead::whereNotNull('biz_type')->where('biz_type', '!=', '')->distinct()->pluck('biz_type');
-        
-        $tenantId = auth()->user()->is_admin ? null : (auth()->user()->tenant_id ?: auth()->id());
-        
-        $userQuery = \App\Models\User::with('roles');
-        if ($tenantId) {
-            $userQuery->where('tenant_id', $tenantId);
+
+        // Build Staff List + Org List for Manager (cascading filter)
+        $staffList      = [];
+        $managerOrgs    = [];
+        $superAdminData = [];
+
+        if (!$user->is_admin && $user->hasRole('Manager')) {
+            // Manager's organizations
+            $orgs   = $user->organizations()->get(['organizations.id', 'organizations.name']);
+            $orgIds = $orgs->pluck('id')->toArray();
+
+            $myStaff = User::where('manager_id', $user->id)
+                ->select('id', 'name', 'email')
+                ->with(['organizations' => function($q) use ($orgIds) {
+                    $q->whereIn('organizations.id', $orgIds)->select('organizations.id', 'organizations.name');
+                }])
+                ->get();
+
+            $allLeadsByCreator = Lead::query()
+                ->whereIn('created_by', $myStaff->pluck('id')->toArray())
+                ->selectRaw('created_by, count(*) as total')
+                ->groupBy('created_by')
+                ->pluck('total', 'created_by');
+
+            $staffList = $myStaff->map(function($s) use ($allLeadsByCreator) {
+                return [
+                    'id'         => $s->id,
+                    'name'       => $s->name,
+                    'email'      => $s->email,
+                    'lead_count' => $allLeadsByCreator[$s->id] ?? 0,
+                    'org_ids'    => $s->organizations->pluck('id')->toArray(),
+                ];
+            })->values()->toArray();
+
+            $managerOrgs = $orgs->map(function($org) use ($staffList) {
+                $staffCount = collect($staffList)->filter(fn($s) => in_array($org->id, $s['org_ids']))->count();
+                return ['id' => $org->id, 'name' => $org->name, 'staff_count' => $staffCount];
+            })->values()->toArray();
+
+        } elseif (!$user->is_admin && $user->hasRole('Company Super Admin')) {
+            // Super Admin cascading data: all managers → their orgs → their staff
+            $allManagers = User::where('tenant_id', $user->tenant_id)
+                ->whereHas('roles', fn($q) => $q->where('name', 'Manager'))
+                ->select('id', 'name')
+                ->get();
+
+            $superAdminData['managers'] = $allManagers->map(fn($m) => [
+                'id'   => $m->id,
+                'name' => $m->name,
+            ])->values()->toArray();
+
+            // For each manager: their orgs
+            $superAdminData['orgs'] = [];
+            $superAdminData['staff'] = [];
+
+            foreach ($allManagers as $manager) {
+                $mOrgs  = $manager->organizations()->get(['organizations.id', 'organizations.name']);
+                $mOrgIds = $mOrgs->pluck('id')->toArray();
+
+                foreach ($mOrgs as $org) {
+                    $superAdminData['orgs'][] = [
+                        'id'         => $org->id,
+                        'name'       => $org->name,
+                        'manager_id' => $manager->id,
+                    ];
+                }
+
+                $mStaff = User::where('manager_id', $manager->id)
+                    ->select('id', 'name')
+                    ->with(['organizations' => fn($q) => $q->whereIn('organizations.id', $mOrgIds)->select('organizations.id')])
+                    ->get();
+
+                $staffLeadCounts = Lead::query()
+                    ->whereIn('created_by', $mStaff->pluck('id')->toArray())
+                    ->selectRaw('created_by, count(*) as total')
+                    ->groupBy('created_by')
+                    ->pluck('total', 'created_by');
+
+                foreach ($mStaff as $s) {
+                    $superAdminData['staff'][] = [
+                        'id'         => $s->id,
+                        'name'       => $s->name,
+                        'manager_id' => $manager->id,
+                        'org_ids'    => $s->organizations->pluck('id')->toArray(),
+                        'lead_count' => $staffLeadCounts[$s->id] ?? 0,
+                    ];
+                }
+            }
         }
-        
-        $availableUsers = $userQuery->get()->filter(function($u) {
-            return $u->hasRole('Company Admin');
-        })->map(function($u) {
-            return [
-                'id' => $u->id,
-                'name' => $u->name . ' (Company Admin)',
-            ];
-        })->values();
 
         return Inertia::render('Dashboard', [
-            'leads' => $leads,
-            'filters' => $request->only(['search', 'plan', 'biz_type', 'status', 'created_by']),
-            'activeTab' => 'lists',
-            'availablePlans' => $availablePlans,
-            'availableBizTypes' => $availableBizTypes,
-            'availableUsers' => $availableUsers,
-            'fieldOptions' => $this->getTenantFieldOptions(),
+            'leads'            => $leads,
+            'filters'          => $request->only(['search', 'plan', 'biz_type', 'status', 'org_id', 'staff_id', 'manager_id']),
+            'activeTab'        => 'lists',
+            'availablePlans'   => $availablePlans,
+            'availableBizTypes'=> $availableBizTypes,
+            'staffList'        => $staffList,
+            'managerOrgs'      => $managerOrgs,
+            'superAdminData'   => $superAdminData,
+            'fieldOptions'     => $this->getTenantFieldOptions(),
         ]);
     }
 
@@ -313,6 +431,11 @@ class LeadController extends Controller
         ]);
 
         $validated['created_by'] = auth()->id();
+        
+        $user = auth()->user();
+        if ($user->organizations()->exists()) {
+            $validated['organization_id'] = $user->organizations()->first()->id;
+        }
         
         // Build contact_name from first_name and last_name (only if they have values)
         $firstName = $validated['first_name'] ?? '';

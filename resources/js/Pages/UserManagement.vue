@@ -68,9 +68,20 @@
                                 <button v-if="can('submenu_users')" class="btn-outline-green" :class="{ pillactive: tab === 'users' }" @click="tab = 'users'">Users</button>
                                 <button v-if="can('submenu_roles')" class="btn-outline-green" :class="{ pillactive: tab === 'roles' }" @click="tab = 'roles'">Roles</button>
                                 <button v-if="can('submenu_permissions')" class="btn-outline-green" :class="{ pillactive: tab === 'permissions' }" @click="tab = 'permissions'">Permissions</button>
-                                <button class="btn-solid-green" style="margin-left:8px;" @click="openAddModal" v-if="(tab === 'users' && can('create_users')) || (tab !== 'users' && can('manage_roles'))">
+                                <button v-if="auth?.role === 'Company Super Admin'" class="btn-outline-green" :class="{ pillactive: tab === 'organizations' }" @click="tab = 'organizations'">Organizations</button>
+                                <!-- View toggle (only on Users tab) -->
+                                <div v-if="tab === 'users'" class="view-toggle-wrap">
+                                    <button :class="['view-toggle-btn', !hierView ? 'active' : '']" @click="hierView = false">
+                                        <v-icon icon="mdi-table" size="14" /> Table
+                                    </button>
+                                    <button :class="['view-toggle-btn', hierView ? 'active' : '']" @click="hierView = true">
+                                        <v-icon icon="mdi-file-tree" size="14" /> Hierarchy
+                                    </button>
+                                </div>
+                                <button class="btn-solid-green" style="margin-left:8px;" @click="openAddModal"
+                                    v-if="(tab === 'users' && (can('create_users') || auth?.is_admin)) || (tab === 'organizations' && auth?.role === 'Company Super Admin') || (tab !== 'users' && tab !== 'organizations' && (can('manage_roles') || auth?.is_admin))">
                                     <v-icon icon="mdi-plus" size="15" />
-                                    Add {{ tab.slice(0, -1) }}
+                                    Add {{ tab === 'organizations' ? 'Organization' : tab.slice(0, -1) }}
                                 </button>
                             </div>
                         </div>
@@ -106,19 +117,139 @@
                                 </thead>
                                 <tbody>
                                  
+                                    <template v-if="tab === 'organizations'">
+                                        <tr v-for="org in props.organizations" :key="org.id">
+                                            <td><strong>{{ org.name }}</strong></td>
+                                            <td>{{ org.users?.length ?? 0 }} members</td>
+                                            <td class="action-td">
+                                                <div class="btn-wrap">
+                                                    <button class="btn-edit" @click="openEditOrg(org)"><v-icon icon="mdi-pencil" size="12" /> Edit</button>
+                                                    <button class="btn-delete" @click="deleteOrg(org.id)"><v-icon icon="mdi-delete" size="12" /> Delete</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="!props.organizations?.length">
+                                            <td colspan="3" class="text-center py-4 text-gray-500">No organizations yet. Click "Add Organization" to create one.</td>
+                                        </tr>
+                                    </template>
+
+                                    <!-- ── USERS TAB ── -->
                                     <template v-if="tab === 'users'">
+                                        <!-- HIERARCHY VIEW -->
+                                        <template v-if="hierView">
+                                            <tr><td colspan="8" style="padding:0; border:none;">
+                                            <div class="hier-wrap">
+
+                                                <!-- Super Admins -->
+                                                <div class="hier-role-section" v-if="superAdmins.length">
+                                                    <div class="hier-role-label hier-sa"><v-icon icon="mdi-shield-crown" size="14"/> Company Super Admin</div>
+                                                    <div class="hier-card" v-for="u in superAdmins" :key="u.id">
+                                                        <div class="hier-avatar hier-avatar-sa">{{ u.name.charAt(0) }}</div>
+                                                        <div class="hier-info">
+                                                            <div class="hier-name">{{ u.name }}</div>
+                                                            <div class="hier-meta">{{ u.email }}</div>
+                                                            <div class="hier-orgs">
+                                                                <span v-for="org in u.organizations" :key="org.id" class="hier-org-badge hier-org-sa">{{ org.name }}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="hier-status" :class="u.is_active ? 'h-active' : 'h-inactive'">{{ u.is_active ? 'Active' : 'Inactive' }}</div>
+                                                        <div class="hier-actions">
+                                                            <button class="btn-edit" @click="openEditUser(u)" v-if="can('edit_users') || auth?.is_admin"><v-icon icon="mdi-pencil" size="12"/> Edit</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Managers + their Staff -->
+                                                <div class="hier-role-section" v-if="managers.length">
+                                                    <div class="hier-role-label hier-mgr"><v-icon icon="mdi-account-tie" size="14"/> Managers &amp; Their Staff</div>
+                                                    <div v-for="mgr in managers" :key="mgr.id" class="hier-manager-block">
+                                                        <!-- Manager row -->
+                                                        <div class="hier-card hier-card-mgr" @click="toggleManager(mgr.id)">
+                                                            <div class="hier-avatar hier-avatar-mgr">{{ mgr.name.charAt(0) }}</div>
+                                                            <div class="hier-info">
+                                                                <div class="hier-name">{{ mgr.name }} <span class="hier-role-pill">Manager</span></div>
+                                                                <div class="hier-meta">{{ mgr.email }}</div>
+                                                                <div class="hier-orgs">
+                                                                    <span v-for="org in mgr.organizations" :key="org.id" class="hier-org-badge hier-org-mgr">{{ org.name }}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="hier-staff-count">
+                                                                <v-icon icon="mdi-account-group" size="13"/> {{ staffUnder(mgr.id).length }} Staff
+                                                            </div>
+                                                            <div class="hier-status" :class="mgr.is_active ? 'h-active' : 'h-inactive'">{{ mgr.is_active ? 'Active' : 'Inactive' }}</div>
+                                                            <div class="hier-actions">
+                                                                <button class="btn-edit" @click.stop="openEditUser(mgr)" v-if="can('edit_users') || auth?.is_admin"><v-icon icon="mdi-pencil" size="12"/> Edit</button>
+                                                                <button class="btn-delete" @click.stop="deleteUser(mgr.id)" v-if="(can('delete_users') || auth?.is_admin) && auth?.id !== mgr.id"><v-icon icon="mdi-delete" size="12"/> Delete</button>
+                                                            </div>
+                                                            <v-icon :icon="expandedManagers.includes(mgr.id) ? 'mdi-chevron-up' : 'mdi-chevron-down'" size="18" color="#9ca3af" style="margin-left:8px;"/>
+                                                        </div>
+                                                        <!-- Staff rows (collapsible) -->
+                                                        <div class="hier-staff-list" v-show="expandedManagers.includes(mgr.id)">
+                                                            <div v-if="!staffUnder(mgr.id).length" class="hier-empty">No staff assigned yet.</div>
+                                                            <div class="hier-card hier-card-staff" v-for="s in staffUnder(mgr.id)" :key="s.id">
+                                                                <div class="hier-tree-line"></div>
+                                                                <div class="hier-avatar hier-avatar-staff">{{ s.name.charAt(0) }}</div>
+                                                                <div class="hier-info">
+                                                                    <div class="hier-name">{{ s.name }}</div>
+                                                                    <div class="hier-meta">{{ s.email }} &bull; {{ s.phone || 'No phone' }}</div>
+                                                                    <div class="hier-orgs">
+                                                                        <span v-for="org in s.organizations" :key="org.id" class="hier-org-badge hier-org-staff">{{ org.name }}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="hier-status" :class="s.is_active ? 'h-active' : 'h-inactive'">{{ s.is_active ? 'Active' : 'Inactive' }}</div>
+                                                                <div class="hier-actions">
+                                                                    <button class="btn-edit" @click="openEditUser(s)" v-if="can('edit_users') || auth?.is_admin"><v-icon icon="mdi-pencil" size="12"/> Edit</button>
+                                                                    <button class="btn-delete" @click="deleteUser(s.id)" v-if="(can('delete_users') || auth?.is_admin) && auth?.id !== s.id"><v-icon icon="mdi-delete" size="12"/> Delete</button>
+                                                                    <button class="btn-toggle" :class="s.is_active ? 'btn-deactivate' : 'btn-activate'" @click="toggleActive(s)" v-if="(can('edit_users') || auth?.is_admin) && auth?.id !== s.id">
+                                                                        <v-icon :icon="s.is_active ? 'mdi-close-circle' : 'mdi-check-circle'" size="12"/>
+                                                                        {{ s.is_active ? 'Deactivate' : 'Approve' }}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Unassigned Users -->
+                                                <div class="hier-role-section" v-if="unassignedUsers.length">
+                                                    <div class="hier-role-label hier-user"><v-icon icon="mdi-account-question" size="14"/> Unassigned / No Manager</div>
+                                                    <div class="hier-card" v-for="u in unassignedUsers" :key="u.id">
+                                                        <div class="hier-avatar hier-avatar-staff">{{ u.name.charAt(0) }}</div>
+                                                        <div class="hier-info">
+                                                            <div class="hier-name">{{ u.name }}</div>
+                                                            <div class="hier-meta">{{ u.email }}</div>
+                                                            <div class="hier-orgs">
+                                                                <span v-for="org in u.organizations" :key="org.id" class="hier-org-badge hier-org-staff">{{ org.name }}</span>
+                                                                <span v-if="!u.organizations?.length" style="color:#9ca3af;font-size:0.78rem;">No org assigned</span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="hier-status" :class="u.is_active ? 'h-active' : 'h-inactive'">{{ u.is_active ? 'Active' : 'Inactive' }}</div>
+                                                        <div class="hier-actions">
+                                                            <button class="btn-edit" @click="openEditUser(u)" v-if="can('edit_users') || auth?.is_admin"><v-icon icon="mdi-pencil" size="12"/> Edit</button>
+                                                            <button class="btn-delete" @click="deleteUser(u.id)" v-if="(can('delete_users') || auth?.is_admin) && auth?.id !== u.id"><v-icon icon="mdi-delete" size="12"/> Delete</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                            </div>
+                                        </td></tr>
+                                    </template>
+
+                                    <!-- ── TABLE VIEW ── -->
+                                    <template v-else>
                                         <tr v-for="user in props.users" :key="user.id">
                                             <td>{{ user.name }}</td>
-                                            <td>{{ user.company_name || '-' }}</td>
+                                            <td>
+                                                <span v-if="user.organizations?.length" style="display:flex;flex-wrap:wrap;gap:4px;">
+                                                    <span v-for="org in user.organizations" :key="org.id" style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:12px;font-size:0.78rem;font-weight:600;">{{ org.name }}</span>
+                                                </span>
+                                                <span v-else style="color:#9ca3af">-</span>
+                                            </td>
                                             <td>{{ user.phone || '-' }}</td>
                                             <td>{{ user.email }}</td>
                                             <td>
-                                                <span v-for="ro in user.all_roles" :key="ro.id" class="role-badge">
-                                                    {{ ro.name }}
-                                                </span>
-                                                <span v-if="!user.all_roles || user.all_roles.length === 0" class="role-badge" style="background: #f3f4f6; color: #6b7280; border: 1px dashed #9ca3af;">
-                                                    Pending Approval
-                                                </span>
+                                                <span v-for="ro in user.all_roles" :key="ro.id" class="role-badge">{{ ro.name }}</span>
+                                                <span v-if="!user.all_roles || user.all_roles.length === 0" class="role-badge" style="background: #f3f4f6; color: #6b7280; border: 1px dashed #9ca3af;">Pending Approval</span>
                                             </td>
                                             <td>
                                                 <span class="status-btn" :class="user.is_active ? 's-active' : 's-inactive'" style="cursor:default">
@@ -134,21 +265,10 @@
                                             </td>
                                             <td class="action-td">
                                                 <div class="btn-wrap">
-                                                    <button class="btn-detail" 
-                                                        @click="openDetail(user)" 
-                                                        :disabled="!user.staff?.length">
-                                                        <v-icon icon="mdi-information-outline" size="12" style="margin-right:4px;" /> Detail
-                                                    </button>
-                                                    <button class="btn-edit" @click="openEditUser(user)" v-if="can('edit_users')">
-                                                        <v-icon icon="mdi-pencil" size="12" /> Edit
-                                                    </button>
-                                                    <button class="btn-delete" @click="deleteUser(user.id)" v-if="can('delete_users') && auth?.id !== user.id">
-                                                        <v-icon icon="mdi-delete" size="12" /> Delete
-                                                    </button>
-                                                    <button class="btn-toggle" 
-                                                            :class="user.is_active ? 'btn-deactivate' : 'btn-activate'" 
-                                                            @click="toggleActive(user)" 
-                                                            v-if="can('edit_users') && auth?.id !== user.id">
+                                                    <button class="btn-detail" @click="openDetail(user)" :disabled="!user.staff?.length"><v-icon icon="mdi-information-outline" size="12" style="margin-right:4px;" /> Detail</button>
+                                                    <button class="btn-edit" @click="openEditUser(user)" v-if="can('edit_users') || auth?.is_admin"><v-icon icon="mdi-pencil" size="12" /> Edit</button>
+                                                    <button class="btn-delete" @click="deleteUser(user.id)" v-if="(can('delete_users') || auth?.is_admin) && auth?.id !== user.id"><v-icon icon="mdi-delete" size="12" /> Delete</button>
+                                                    <button class="btn-toggle" :class="user.is_active ? 'btn-deactivate' : 'btn-activate'" @click="toggleActive(user)" v-if="(can('edit_users') || auth?.is_admin) && auth?.id !== user.id">
                                                         <v-icon :icon="user.is_active ? 'mdi-close-circle' : 'mdi-check-circle'" size="12" /> 
                                                         {{ user.is_active ? 'Deactivate' : 'Approve' }}
                                                     </button>
@@ -159,6 +279,8 @@
                                             <td colspan="5" class="text-center py-4 text-gray-500">No users found.</td>
                                         </tr>
                                     </template>
+                                    </template>
+                                    <!-- /users tab -->
 
                                     <template v-if="tab === 'roles'">
                                         <tr v-for="ro in props.roles" :key="ro.id">
@@ -270,15 +392,13 @@
                             <input v-model="userForm.name" type="text" class="form-input" placeholder="Enter full name" />
                             <span v-if="userForm.errors.name" class="error-text">{{ userForm.errors.name }}</span>
                         </div>
-                        <div class="form-group">
-                            <label>Organization Name</label>
-                            <input v-model="userForm.company_name" type="text" class="form-input" placeholder="Enter organization name" />
-                            <span v-if="userForm.errors.company_name" class="error-text">{{ userForm.errors.company_name }}</span>
+                        <div class="form-group" v-if="auth?.is_admin">
+                            <label>Company Name</label>
+                            <input v-model="userForm.company_name" type="text" class="form-input" placeholder="Enter company name" />
                         </div>
                         <div class="form-group">
                             <label>Phone Number</label>
                             <input v-model="userForm.phone" type="text" class="form-input" placeholder="Enter phone number" />
-                            <span v-if="userForm.errors.phone" class="error-text">{{ userForm.errors.phone }}</span>
                         </div>
                         <div class="form-group">
                             <label>Email Address</label>
@@ -292,14 +412,40 @@
                         </div>
                         <div class="form-group">
                             <label>Confirm Password</label>
-                                            <input v-model="userForm.password_confirmation" type="password" class="form-input" placeholder="Confirm password" />
+                            <input v-model="userForm.password_confirmation" type="password" class="form-input" placeholder="Confirm password" />
+                        </div>
+                        <div class="form-group" v-if="props.organizations?.length && !auth?.is_admin">
+                            <label>Assign to Organization</label>
+                            <div class="org-checkbox-list">
+                                <label
+                                    v-for="org in props.organizations"
+                                    :key="org.id"
+                                    class="org-checkbox-item"
+                                    :class="{ 'org-checked': userForm.organizations.includes(org.id) }"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        :value="org.id"
+                                        v-model="userForm.organizations"
+                                        style="display:none;"
+                                    />
+                                    <span class="org-check-icon">
+                                        <v-icon
+                                            :icon="userForm.organizations.includes(org.id) ? 'mdi-checkbox-marked-circle' : 'mdi-checkbox-blank-circle-outline'"
+                                            size="16"
+                                        />
+                                    </span>
+                                    <span>{{ org.name }}</span>
+                                </label>
+                            </div>
+                            <span class="help-text">Click to select / deselect organizations.</span>
                         </div>
                         <div class="form-group">
-                            <label>Assign Roles</label>
+                            <label>Assign Role</label>
                             <select v-model="userForm.roles" multiple class="form-input select-multiple">
-                                <option v-for="r in props.roles.filter(role => auth?.is_admin || auth?.roles?.includes('Company Super Admin') || role.name !== 'Company Super Admin')" :key="r.id" :value="r.name">{{ r.name }}</option>
+                                <option v-for="r in props.roles" :key="r.id" :value="r.name">{{ r.name }}</option>
                             </select>
-                            <span class="help-text">Hold Ctrl/Cmd to select multiple roles.</span>
+                            <span class="help-text">Hold Ctrl/Cmd to select multiple.</span>
                         </div>
                         <template v-if="auth?.is_admin">
                             <div class="form-group" style="margin-top:16px;">
@@ -409,12 +555,35 @@
                 </div>
             </div>
             
+            <!-- Organization Create/Edit Modal -->
+            <div v-if="orgDialog" class="custom-modal-backdrop" @click.self="orgDialog = false">
+                <div class="custom-modal-card" style="max-width: 480px;">
+                    <div class="modal-header">
+                        <h3>{{ isEditOrg ? 'Edit Organization' : 'Add New Organization' }}</h3>
+                        <button class="modal-close" @click="orgDialog = false">✖</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>Organization Name</label>
+                            <input v-model="orgForm.name" type="text" class="form-input" placeholder="e.g. Organization A, Yangon Branch" />
+                            <span v-if="orgForm.errors.name" class="error-text">{{ orgForm.errors.name }}</span>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-cancel" @click="orgDialog = false">Cancel</button>
+                        <button class="btn-save" @click="saveOrg" :disabled="orgForm.processing">
+                            {{ orgForm.processing ? 'Saving...' : isEditOrg ? 'Update' : 'Create Organization' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </v-app>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { router, usePage, useForm } from '@inertiajs/vue3';
 import Swal from 'sweetalert2';
 import Menu from '@/Components/Menu.vue';
@@ -424,6 +593,7 @@ const props = defineProps({
     roles: { type: Array, default: () => [] },
     permissions: { type: Array, default: () => [] },
     plans: { type: Array, default: () => [] },
+    organizations: { type: Array, default: () => [] },
 });
 
 const page = usePage();
@@ -508,6 +678,36 @@ const openDetail = (u) => {
     detailDialog.value = true;
 };
 
+// ── Hierarchy view ──────────────────────────────────────────────
+const hierView          = ref(false);
+const expandedManagers  = ref([]);
+
+const hasRole = (user, roleName) => user.all_roles?.some(r => r.name === roleName);
+
+const superAdmins = computed(() =>
+    (props.users || []).filter(u => hasRole(u, 'Company Super Admin'))
+);
+const managers = computed(() =>
+    (props.users || []).filter(u => hasRole(u, 'Manager'))
+);
+const staffUnder = (managerId) =>
+    (props.users || []).filter(u => u.manager_id === managerId && hasRole(u, 'User'));
+const unassignedUsers = computed(() =>
+    (props.users || []).filter(u =>
+        hasRole(u, 'User') &&
+        !managers.value.some(m => m.id === u.manager_id)
+    )
+);
+const toggleManager = (id) => {
+    const idx = expandedManagers.value.indexOf(id);
+    if (idx >= 0) expandedManagers.value.splice(idx, 1);
+    else expandedManagers.value.push(id);
+};
+// Expand all managers by default when switching to hierarchy view
+watch(hierView, (v) => {
+    if (v) expandedManagers.value = managers.value.map(m => m.id);
+});
+
 const userDialog = ref(false);
 const isEdit = ref(false);
 
@@ -520,9 +720,35 @@ const userForm = useForm({
     password: '',
     password_confirmation: '',
     roles: [],
+    organizations: [],
     plan_id: null,
     plan_expired_at: '',
 });
+
+// Organization CRUD
+const orgDialog = ref(false);
+const isEditOrg = ref(false);
+const orgForm = useForm({ id: null, name: '' });
+
+const openEditOrg = (org) => {
+    isEditOrg.value = true;
+    orgForm.id = org.id;
+    orgForm.name = org.name;
+    orgDialog.value = true;
+};
+
+const saveOrg = () => {
+    if (isEditOrg.value) {
+        orgForm.put(`/organizations/${orgForm.id}`, { onSuccess: () => { orgDialog.value = false; orgForm.reset(); } });
+    } else {
+        orgForm.post('/organizations', { onSuccess: () => { orgDialog.value = false; orgForm.reset(); } });
+    }
+};
+
+const deleteOrg = (id) => {
+    Swal.fire({ title: 'Delete Organization?', text: 'All members will be detached.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', confirmButtonText: 'Yes, delete' })
+        .then(r => { if (r.isConfirmed) router.delete(`/organizations/${id}`); });
+};
 
 const updateExpireDate = () => {
     if (userForm.plan_id) {
@@ -556,6 +782,10 @@ const openAddModal = () => {
         userForm.reset();
         userForm.clearErrors();
         userDialog.value = true;
+    } else if (tab.value === 'organizations') {
+        isEditOrg.value = false;
+        orgForm.reset();
+        orgDialog.value = true;
     } else if (tab.value === 'roles') {
         newRoleForm.reset();
         newRoleForm.clearErrors();
@@ -577,6 +807,7 @@ const openEditUser = (u) => {
     userForm.phone = u.phone || '';
     userForm.email = u.email;
     userForm.roles = u.all_roles ? u.all_roles.map(r => r.name) : [];
+    userForm.organizations = u.organizations ? u.organizations.map(o => o.id) : [];
     userForm.plan_id = u.plan_id || null;
     userForm.plan_expired_at = u.plan_expired_at ? u.plan_expired_at.split('T')[0] : '';
     userDialog.value = true;
@@ -585,11 +816,19 @@ const openEditUser = (u) => {
 const saveUser = () => {
     if (isEdit.value) {
         userForm.put(`/users/${userForm.id}`, {
-            onSuccess: () => userDialog.value = false
+            onSuccess: () => {
+                userDialog.value = false;
+                userForm.reset();
+                userForm.clearErrors();
+            }
         });
     } else {
         userForm.post('/users', {
-            onSuccess: () => userDialog.value = false
+            onSuccess: () => {
+                userDialog.value = false;
+                userForm.reset();
+                userForm.clearErrors();
+            }
         });
     }
 };
@@ -753,4 +992,144 @@ const toggleActive = (user) => {
 
 <style scoped>
 @import '../../css/usermanagement.css';
+
+/* ── View Toggle ─────────────────────────────────────────── */
+.view-toggle-wrap {
+    display: flex; align-items: center;
+    background: #f3f4f6; border: 1px solid #e5e7eb;
+    border-radius: 8px; padding: 3px; gap: 2px;
+    margin-left: 8px;
+}
+.view-toggle-btn {
+    display: flex; align-items: center; gap: 4px;
+    padding: 5px 12px; border-radius: 6px; border: none;
+    background: transparent; color: #6b7280;
+    font-size: 0.8rem; font-weight: 500; cursor: pointer;
+    transition: all 0.15s;
+}
+.view-toggle-btn.active {
+    background: #fff; color: #111827;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    font-weight: 600;
+}
+
+/* ── Hierarchy Wrap ──────────────────────────────────────── */
+.hier-wrap { padding: 20px 16px; display: flex; flex-direction: column; gap: 24px; }
+
+.hier-role-section { display: flex; flex-direction: column; gap: 8px; }
+.hier-role-label {
+    font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.6px; padding: 6px 12px; border-radius: 20px;
+    display: inline-flex; align-items: center; gap: 5px;
+    margin-bottom: 4px; width: fit-content;
+}
+.hier-sa   { background: #fef3c7; color: #92400e; }
+.hier-mgr  { background: #dbeafe; color: #1e40af; }
+.hier-user { background: #f3f4f6; color: #4b5563; }
+
+/* Manager block */
+.hier-manager-block { display: flex; flex-direction: column; gap: 0; }
+
+/* Cards */
+.hier-card {
+    display: flex; align-items: center; gap: 12px;
+    background: #fff; border: 1px solid #e5e7eb;
+    border-radius: 10px; padding: 12px 14px;
+    transition: box-shadow 0.15s;
+}
+.hier-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+.hier-card-mgr {
+    cursor: pointer;
+    background: #f8faff; border-color: #bfdbfe;
+    border-radius: 10px 10px 0 0;
+    border-bottom: none;
+}
+.hier-card-staff {
+    background: #fafafa;
+    border-radius: 0;
+    border-top: 1px dashed #e5e7eb;
+    padding-left: 40px;
+    position: relative;
+}
+.hier-card-staff:last-child { border-radius: 0 0 10px 10px; }
+
+/* Tree line */
+.hier-tree-line {
+    position: absolute; left: 22px; top: 0; bottom: 0;
+    width: 2px; background: #e5e7eb;
+}
+
+/* Avatars */
+.hier-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.95rem; flex-shrink: 0;
+}
+.hier-avatar-sa    { background: #fef3c7; color: #92400e; }
+.hier-avatar-mgr   { background: #dbeafe; color: #1e40af; }
+.hier-avatar-staff { background: #dcfce7; color: #166534; }
+
+/* Info */
+.hier-info { flex: 1; min-width: 0; }
+.hier-name { font-size: 0.88rem; font-weight: 600; color: #111827; }
+.hier-meta { font-size: 0.78rem; color: #6b7280; margin-top: 1px; }
+.hier-orgs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.hier-org-badge {
+    font-size: 0.72rem; font-weight: 600;
+    padding: 2px 8px; border-radius: 10px;
+}
+.hier-org-sa    { background: #fef3c7; color: #92400e; }
+.hier-org-mgr   { background: #dbeafe; color: #1e40af; }
+.hier-org-staff { background: #dcfce7; color: #166534; }
+
+.hier-role-pill {
+    font-size: 0.68rem; font-weight: 700;
+    background: #dbeafe; color: #1e40af;
+    border-radius: 8px; padding: 1px 7px;
+    margin-left: 6px; vertical-align: middle;
+}
+.hier-staff-count {
+    font-size: 0.78rem; color: #6b7280;
+    display: flex; align-items: center; gap: 4px;
+    white-space: nowrap; margin-right: 8px;
+}
+.hier-status {
+    font-size: 0.72rem; font-weight: 600;
+    padding: 3px 10px; border-radius: 20px;
+    white-space: nowrap;
+}
+.h-active   { background: #dcfce7; color: #166534; }
+.h-inactive { background: #fee2e2; color: #991b1b; }
+.hier-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.hier-staff-list { display: flex; flex-direction: column; }
+.hier-empty {
+    padding: 12px 40px; font-size: 0.82rem;
+    color: #9ca3af; font-style: italic;
+    background: #fafafa; border: 1px dashed #e5e7eb;
+    border-top: none; border-radius: 0 0 10px 10px;
+}
+
+/* ── Org Checkbox List ───────────────────────────────────── */
+.org-checkbox-list {
+    display: flex; flex-direction: column; gap: 6px;
+    max-height: 180px; overflow-y: auto;
+    border: 1px solid #e5e7eb; border-radius: 8px;
+    padding: 8px;
+}
+.org-checkbox-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; border-radius: 6px;
+    cursor: pointer; font-size: 0.88rem; color: #374151;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
+    user-select: none;
+}
+.org-checkbox-item:hover {
+    background: #f0fdf4; border-color: #bbf7d0;
+}
+.org-checkbox-item.org-checked {
+    background: #dcfce7; border-color: #86efac; color: #166534; font-weight: 600;
+}
+.org-check-icon { color: #9ca3af; display: flex; }
+.org-checkbox-item.org-checked .org-check-icon { color: #16a34a; }
 </style>

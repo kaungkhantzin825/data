@@ -61,12 +61,15 @@
 
                     <div class="dash-master-wrapper">
                         <div v-if="tab === 'dashboard'" class="dash-col">
-                            <DashboardHeader 
-                                v-model:plan="dashSelectedPlan" 
-                                v-model:month="dashMonth" 
-                                v-model:year="dashYear" 
-                                v-model:user="dashUserId"
-                                :availableUsers="availableUsers"
+                            <DashboardHeader
+                                :availablePlans="props.availablePlans"
+                                :availableBizTypes="props.availableBizTypes"
+                                :superAdminData="props.superAdminData"
+                                :managerOrgs="props.managerOrgs"
+                                :staffList="props.staffList"
+                                :filters="props.filters"
+                                :month="props.reqMonth"
+                                :year="props.reqYear"
                                 @update="updateDash"
                             />
 
@@ -86,6 +89,9 @@
                             :availablePlans="availablePlans"
                             :availableBizTypes="availableBizTypes"
                             :availableUsers="availableUsers"
+                            :staffList="props.staffList"
+                            :managerOrgs="props.managerOrgs"
+                            :superAdminData="props.superAdminData"
                             @upload="goToTab('upload')"
                             @download="downloadCsv"
                             @apply="applyFilters"
@@ -145,7 +151,12 @@ const props = defineProps({
     monthlyOverview:{ type: Object,  default: () => ({}) },
     reqMonth:       { type: Number,  default: () => new Date().getMonth() + 1 },
     reqYear:        { type: Number,  default: () => new Date().getFullYear() },
-    availableUsers: { type: Array,   default: () => [] },
+    availableUsers:  { type: Array,   default: () => [] },
+    staffList:       { type: Array,   default: () => [] },
+    managerOrgs:     { type: Array,   default: () => [] },
+    superAdminData:  { type: Object,  default: () => ({ managers: [], orgs: [], staff: [] }) },
+    availablePlans:    { type: Array,  default: () => [] },
+    availableBizTypes: { type: Array,  default: () => [] },
 });
 
 const page       = usePage();
@@ -158,26 +169,21 @@ const dashMonth        = ref(new Date().getMonth() + 1);
 const dashYear         = ref(new Date().getFullYear());
 const dashUserId       = ref(props.filters?.user_id ?? '');
 
-const updateDash = () => {
-    router.get('/dashboard', { month: dashMonth.value, year: dashYear.value, user_id: dashUserId.value }, { preserveState: true, preserveScroll: true });
+const updateDash = (filters) => {
+    router.get('/dashboard', {
+        plan:       filters?.plan       ?? '',
+        biz_type:   filters?.biz_type   ?? '',
+        status:     filters?.status     ?? '',
+        manager_id: filters?.manager_id ?? '',
+        org_id:     filters?.org_id     ?? '',
+        staff_id:   filters?.staff_id   ?? '',
+        month:      filters?.month      ?? dashMonth.value,
+        year:       filters?.year       ?? dashYear.value,
+    }, { preserveState: true, preserveScroll: true });
 };
 
-const leftPlans = computed(() => {
-    const all = ['Enterprise', 'Business DIA', 'MojoeElite', 'Premium Home Fiber', 'Staff Plan'];
-    let sel = (dashSelectedPlan.value || '').trim();
-    if (sel === 'All Plans') return all;
-    for (let a of all) {
-        if (sel.includes(a) && sel.toLowerCase().includes('customer')) return [a];
-    }
-    return [];
-});
-
-const rightPlans = computed(() => {
-    const all = ['Enterprise DIA', 'Business DIA', 'MojoeElite'];
-    let sel = (dashSelectedPlan.value || '').trim();
-    if (sel === 'All Plans') return all;
-    return all.includes(sel) ? [sel] : [];
-});
+const leftPlans  = computed(() => ['Enterprise', 'Business DIA', 'MojoeElite', 'Premium Home Fiber']);
+const rightPlans = computed(() => ['Enterprise DIA', 'Business DIA', 'MojoeElite']);
 
 const dashPeriod = ref({});
 const getPeriod = (plan) => dashPeriod.value[plan] || 'Monthly';
@@ -301,12 +307,16 @@ const resetLeadForm = () => {
     goToTab('lists');
 };
 
+const selectedStaffId = ref(props.filters?.staff_id ?? null);
+
 const f = ref({
-    search:   props.filters?.search   ?? '',
-    plan:     props.filters?.plan     ?? '',
-    biz_type: props.filters?.biz_type ?? '',
-    status:   props.filters?.status   ?? '',
-    created_by: props.filters?.created_by ?? '',
+    search:     props.filters?.search     ?? '',
+    plan:       props.filters?.plan       ?? '',
+    biz_type:   props.filters?.biz_type   ?? '',
+    status:     props.filters?.status     ?? '',
+    manager_id: props.filters?.manager_id ?? '',
+    org_id:     props.filters?.org_id     ?? '',
+    staff_id:   props.filters?.staff_id   ?? '',
 });
 
 const applyFilters = () => {
@@ -402,7 +412,8 @@ const hUpload = ({ file, updateExisting }) => {
 
 
 const resetFilters = () => {
-    f.value = { search: '', plan: '', biz_type: '', status: '', created_by: '' };
+    selectedStaffId.value = null;
+    f.value = { search: '', plan: '', biz_type: '', status: '', manager_id: '', org_id: '', staff_id: '' };
     router.get('/leads', {}, { preserveState: true, preserveScroll: true, only: ['leads'] });
 };
 
